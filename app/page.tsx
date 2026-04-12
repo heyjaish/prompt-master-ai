@@ -22,22 +22,6 @@ import { extractKeywords }     from "@/lib/keywords";
 type ViewMode = "chat" | "split";
 const VIEW_PREF_KEY = "pm_view_pref";
 
-// Quick Action chips
-const QUICK_ACTIONS = [
-  { label: "16:9 Ratio",     value: "aspect ratio 16:9" },
-  { label: "9:16 Vertical",  value: "aspect ratio 9:16, vertical format" },
-  { label: "4K Quality",     value: "4K ultra HD quality" },
-  { label: "Hyperrealistic", value: "hyperrealistic, photorealistic" },
-  { label: "Cinematic",      value: "cinematic lighting, dramatic shadows" },
-  { label: "Midjourney",     value: "--v 6 --ar 16:9 --style raw" },
-  { label: "Dark Mode UI",   value: "dark mode UI/UX design" },
-  { label: "Step by Step",   value: "explain step by step with examples" },
-  { label: "JSON Output",    value: "output as valid JSON" },
-  { label: "Bullet Points",  value: "format response as concise bullet points" },
-  { label: "Professional",   value: "formal professional tone" },
-  { label: "Creative",       value: "creative and imaginative style" },
-];
-
 export default function HomePage() {
   const { user } = useAuth();
   const [messages, setMessages]             = useState<Message[]>([]);
@@ -54,7 +38,17 @@ export default function HomePage() {
   const [learnedKeywords, setLearnedKws]    = useState<string[]>([]);
   const [announcement, setAnnouncement]     = useState<{ enabled:boolean; title:string; message:string; type:string } | null>(null);
   const [inputCollapsed, setInputCollapsed] = useState(false);
+  const [chipsCollapsed, setChipsCollapsed] = useState(false); // bottom keyword panel
+  const chipsIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-hide chips panel after 15s idle
+  const resetChipsTimer = () => {
+    if (chipsIdleTimer.current) clearTimeout(chipsIdleTimer.current);
+    setChipsCollapsed(false);
+    chipsIdleTimer.current = setTimeout(() => setChipsCollapsed(true), 15000);
+  };
+  useEffect(() => () => { if (chipsIdleTimer.current) clearTimeout(chipsIdleTimer.current); }, []);
 
   // ── Restore view preference ─────────────────────────────────
   useEffect(() => {
@@ -334,30 +328,28 @@ export default function HomePage() {
                   </button>
                 ) : (
                   <>
-                    {/* Learning chips */}
+                    {/* Module Keywords — collapsible + auto-hide */}
                     {user && (
-                      <LearningChips
-                        uid={user.uid}
-                        specialistId={activeSpecialist?.slotId}
-                        onChipClick={handleInsert}
-                        refreshTrigger={chipsRefresh}
-                      />
+                      <div onMouseMove={resetChipsTimer} onClick={resetChipsTimer}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 2 }}>
+                          <button
+                            onClick={() => setChipsCollapsed(c => !c)}
+                            style={{ fontSize: 10.5, color: "var(--tx-3)", background: "none", border: "none", cursor: "pointer", padding: "1px 6px", opacity: .6 }}
+                            title={chipsCollapsed ? "Show keywords" : "Hide keywords"}
+                          >
+                            {chipsCollapsed ? "▲ Keywords" : "▼ Hide"}
+                          </button>
+                        </div>
+                        {!chipsCollapsed && (
+                          <LearningChips
+                            uid={user.uid}
+                            specialistId={activeSpecialist?.slotId}
+                            onChipClick={handleInsert}
+                            refreshTrigger={chipsRefresh}
+                          />
+                        )}
+                      </div>
                     )}
-
-                    {/* Quick action chips */}
-                    <div className="quick-bar">
-                      {QUICK_ACTIONS.map(a => (
-                        <button
-                          key={a.label}
-                          onClick={() => handleInsert(a.value)}
-                          disabled={isLoading}
-                          className="quick-chip"
-                          title={`Append: "${a.value}"`}
-                        >
-                          {a.label}
-                        </button>
-                      ))}
-                    </div>
 
                     <ChatInput
                       onSend={handleSend}

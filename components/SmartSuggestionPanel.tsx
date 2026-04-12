@@ -109,6 +109,7 @@ export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, o
         background: "rgba(9,9,13,.97)",
         borderLeft: "1px solid rgba(99,102,241,.18)",
         display: "flex", flexDirection: "column",
+        flexShrink: 0,
       }}>
         <div style={{ width: 200, display: "flex", flexDirection: "column", height: "100%", padding: "12px 10px" }}>
           {/* Header */}

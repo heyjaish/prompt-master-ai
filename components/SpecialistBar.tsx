@@ -107,7 +107,7 @@ export default function SpecialistBar({ uid, activeSlot, onActivate }: Props) {
                 >
                   <span style={{ fontSize: 13 }}>{s?.emoji ?? "+"}</span>
                   <span style={{ maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {s?.name ?? `Slot ${i+1}`}
+                    {s?.name ?? `Agent ${i+1}`}
                   </span>
                   {isActive && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#6366f1", flexShrink: 0 }}/>}
                 </button>
@@ -153,7 +153,7 @@ export default function SpecialistBar({ uid, activeSlot, onActivate }: Props) {
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: "var(--tx-1)" }}>
-                {slots[editing] ? "Edit Specialist" : `Create Specialist — Slot ${editing + 1}`}
+                {slots[editing] ? "Edit Agent" : `Create Agent ${editing + 1}`}
               </div>
               <button onClick={closeEditor} style={{ background:"none", border:"none", color:"var(--tx-3)", cursor:"pointer" }}><X size={16}/></button>
             </div>

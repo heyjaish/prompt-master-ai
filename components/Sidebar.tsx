@@ -55,7 +55,7 @@ export default function Sidebar({ history, onSelectHistory, onNewChat, onDeleteH
         </div>
         {!collapsed && (
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tx-1)", letterSpacing: "-.01em" }}>
-            Prompt Master AI
+            PromptForge
           </span>
         )}
       </div>
@@ -66,10 +66,10 @@ export default function Sidebar({ history, onSelectHistory, onNewChat, onDeleteH
           onClick={onNewChat}
           className="sidebar-new-btn"
           style={{ justifyContent: collapsed ? "center" : "flex-start" }}
-          title="New prompt"
+          title="New Chat"
         >
           <Plus size={14} style={{ flexShrink: 0 }} />
-          {!collapsed && "New Prompt"}
+          {!collapsed && "New Chat"}
         </button>
       </div>
 
@@ -86,12 +86,9 @@ export default function Sidebar({ history, onSelectHistory, onNewChat, onDeleteH
       {/* History list */}
       <div className="flex-1 scroll" style={{ padding: "2px 6px 10px" }}>
         {history.length === 0 && !collapsed && (
-          <div style={{
-            padding: "28px 12px", textAlign: "center",
-            fontSize: 12.5, color: "var(--tx-3)", lineHeight: 1.7,
-          }}>
+          <div style={{ padding: "28px 12px", textAlign: "center", fontSize: 12.5, color: "var(--tx-3)", lineHeight: 1.7 }}>
             <MessageSquare size={20} style={{ margin: "0 auto 8px", opacity: .3 }} />
-            No prompts yet.
+            No chats yet.<br/>Start a prompt above!
           </div>
         )}
 
