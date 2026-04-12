@@ -7,6 +7,7 @@ export interface HistoryEntry {
   originalIdea: string;
   timestamp: number;
   category: PromptCategory;
+  specialist?: string;     // slotId of active specialist when this was generated
 }
 
 const KEY = "prompt-master-history";

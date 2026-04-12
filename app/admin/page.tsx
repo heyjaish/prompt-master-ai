@@ -16,7 +16,7 @@ const ADMIN_EMAIL    = "jaishkumar55@gmail.com";
 const ADMIN_PASSWORD = "PromptMaster@2025";
 const ADMIN_KEY      = process.env.NEXT_PUBLIC_ADMIN_SECRET_KEY ?? "admin-secret-2025";
 
-type Tab = "overview"|"analytics"|"users"|"features"|"aiconfig"|"announcements"|"limits"|"settings";
+type Tab = "overview"|"analytics"|"users"|"features"|"aiconfig"|"announcements"|"limits"|"settings"|"analyst";
 
 // ── Types ──────────────────────────────────────────────────────
 interface UserRow {
@@ -127,6 +127,11 @@ export default function AdminPage() {
   const [expandedUid,setExpUid] = useState<string|null>(null);
   const [editNote,setEditNote] = useState("");
   const [editCDL,setEditCDL]  = useState<number|null>(null);
+  const [analystInsights, setAnalystInsights] = useState<string|"">("");
+  const [analystLoading, setAnalystLoading]   = useState(false);
+  const [analystQ, setAnalystQ]               = useState("");
+  const [analystCache, setAnalystCache]       = useState<Record<string,unknown>|null>(null);
+  const [analystTime, setAnalystTime]         = useState<number|null>(null);
 
   const isAdmin = useMemo(()=>user?.email?.toLowerCase()===ADMIN_EMAIL.toLowerCase(),[user]);
   const st=(m:string)=>{setToast(m);setTimeout(()=>setToast(""),3200);};
@@ -197,6 +202,7 @@ export default function AdminPage() {
     ["overview","Overview",<LayoutDashboard size={13}/>],
     ["analytics","Analytics",<BarChart2 size={13}/>],
     ["users","Users",<Users size={13}/>],
+    ["analyst","🤖 AI Analyst",<Zap size={13}/>],
     ["features","Features",<ToggleRight size={13}/>],
     ["aiconfig","AI Config",<Bot size={13}/>],
     ["announcements","Alerts",<Megaphone size={13}/>],
@@ -725,6 +731,67 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ══ AI ANALYST ══ */}
+          {tab==="analyst"&&(
+            <div style={{maxWidth:660,display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{background:"linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.08))",border:"1px solid rgba(99,102,241,.25)",borderRadius:S.bdR,padding:"20px 22px",display:"flex",alignItems:"flex-start",gap:14}}>
+                <div style={{width:44,height:44,borderRadius:12,background:"rgba(99,102,241,.2)",border:"1px solid rgba(99,102,241,.35)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Zap size={20} color="#818cf8"/></div>
+                <div>
+                  <div style={{fontSize:15,fontWeight:700,color:S.tx1,marginBottom:5}}>🤖 Gemini AI Analyst</div>
+                  <div style={{fontSize:13,color:S.tx2,lineHeight:1.65}}>Uses your Gemini API to analyze real user behavior and generate actionable improvement suggestions. Your data never leaves your servers.</div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+                {[[`${totalU}`,"Total Users","#818cf8"],[`${totalP}`,"Total Prompts","#4ade80"],[`${users.filter(u=>u.status==="active").length}`,"Active Users","#fbbf24"]].map(([v,l,c])=>(
+                  <div key={l} style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:12,padding:"14px 16px",textAlign:"center"}}>
+                    <div style={{fontSize:22,fontWeight:800,color:c,letterSpacing:"-.03em"}}>{v}</div>
+                    <div style={{fontSize:11.5,color:S.tx3,marginTop:3}}>{l}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:S.bdR,padding:20}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <div>
+                    <div style={{fontSize:13.5,fontWeight:700,color:S.tx1}}>📊 Auto Insights</div>
+                    <div style={{fontSize:12,color:S.tx3,marginTop:3}}>{analystTime?`Last generated: ${new Date(analystTime).toLocaleTimeString()}`:"Not generated yet — click to analyze"}</div>
+                  </div>
+                  <button disabled={analystLoading} onClick={async()=>{setAnalystLoading(true);try{const r=await fetch("/api/ai-analyst",{method:"POST",headers:{"Content-Type":"application/json","x-admin-key":ADMIN_KEY},body:JSON.stringify({})});const d=await r.json();if(d.error)throw new Error(d.error);setAnalystInsights(d.insights);setAnalystCache(d.data||null);setAnalystTime(d.generatedAt||Date.now());}catch(e){st("❌ "+(e instanceof Error?e.message:e));}finally{setAnalystLoading(false);}}}
+                    style={{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:9,border:"none",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",opacity:analystLoading?.7:1,flexShrink:0}}>
+                    {analystLoading?<><span style={{width:12,height:12,borderRadius:"50%",border:"2px solid rgba(255,255,255,.4)",borderTopColor:"#fff",animation:"spin 1s linear infinite",display:"inline-block"}}/> Analyzing…</>:<><Zap size={12}/> Generate Insights</>}
+                  </button>
+                </div>
+                {analystInsights?(
+                  <div style={{background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.18)",borderRadius:12,padding:"16px 18px"}}>
+                    {analystInsights.split("\n").filter(Boolean).map((line,i,arr)=>(
+                      <div key={i} style={{fontSize:13.5,color:S.tx1,lineHeight:1.7,padding:"5px 0",borderBottom:i<arr.length-1?`1px solid ${S.border}`:"none"}}>{line}</div>
+                    ))}
+                  </div>
+                ):(
+                  <div style={{textAlign:"center",padding:"28px 0",color:S.tx3,fontSize:13}}><div style={{fontSize:32,marginBottom:10}}>🔍</div>Click "Generate Insights" to let Gemini analyze your users</div>
+                )}
+              </div>
+              <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:S.bdR,padding:20}}>
+                <div style={{fontSize:13.5,fontWeight:700,color:S.tx1,marginBottom:5}}>💬 Ask AI About Your Users</div>
+                <div style={{fontSize:12,color:S.tx3,marginBottom:13}}>Ask any question — Gemini will answer based on your real user data.</div>
+                <div style={{display:"flex",gap:9}}>
+                  <input value={analystQ} onChange={e=>setAnalystQ(e.target.value)}
+                    onKeyDown={async e=>{if(e.key!=="Enter"||!analystQ.trim()||analystLoading)return;setAnalystLoading(true);try{const r=await fetch("/api/ai-analyst",{method:"POST",headers:{"Content-Type":"application/json","x-admin-key":ADMIN_KEY},body:JSON.stringify({question:analystQ,userData:analystCache})});const d=await r.json();if(d.error)throw new Error(d.error);setAnalystInsights(`Q: ${analystQ}\n\n${d.insights}`);setAnalystQ("");}catch(ex){st("❌ "+(ex instanceof Error?ex.message:ex));}finally{setAnalystLoading(false);}}}
+                    placeholder='e.g. "Which specialist is most popular?" · Press Enter'
+                    style={{flex:1,background:"rgba(255,255,255,.05)",border:`1px solid ${S.border}`,borderRadius:10,color:S.tx1,fontSize:13,padding:"9px 13px",outline:"none"}}/>
+                  <button onClick={async()=>{if(!analystQ.trim()||analystLoading)return;setAnalystLoading(true);try{const r=await fetch("/api/ai-analyst",{method:"POST",headers:{"Content-Type":"application/json","x-admin-key":ADMIN_KEY},body:JSON.stringify({question:analystQ,userData:analystCache})});const d=await r.json();if(d.error)throw new Error(d.error);setAnalystInsights(`Q: ${analystQ}\n\n${d.insights}`);setAnalystQ("");}catch(ex){st("❌ "+(ex instanceof Error?ex.message:ex));}finally{setAnalystLoading(false);}}}
+                    disabled={!analystQ.trim()||analystLoading}
+                    style={{padding:"9px 16px",borderRadius:10,border:"none",background:"rgba(99,102,241,.2)",color:"#818cf8",fontSize:12.5,fontWeight:600,cursor:"pointer",flexShrink:0}}>Ask →</button>
+                </div>
+                <div style={{marginTop:10,display:"flex",gap:7,flexWrap:"wrap"}}>
+                  {["What are users struggling with?","Who are my power users?","Should I add a Pro trial?","What features are unused?"].map(q=>(
+                    <button key={q} onClick={()=>setAnalystQ(q)} style={{fontSize:11.5,padding:"3px 10px",borderRadius:20,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.03)",color:S.tx3,cursor:"pointer"}}>{q}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{fontSize:11.5,color:S.tx3,textAlign:"center"}}>🔒 Only anonymized stats sent to Gemini — no emails or user IDs shared.</div>
             </div>
           )}
         </div>
