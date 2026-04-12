@@ -70,7 +70,7 @@ async function generateWithKeyRotation(
   keys: string[], modelName: string, systemInstruction: string,
   temperature: number, maxTokens: number, parts: Part[]
 ): Promise<{ text: string; keyUsed: number }> {
-  let lastError: unknown;
+  const keyErrors: string[] = [];
 
   for (let i = 0; i < keys.length; i++) {
     try {
@@ -90,17 +90,22 @@ async function generateWithKeyRotation(
       console.log(`[KeyRotation] ✅ Key ${i + 1} succeeded`);
       return { text, keyUsed: i + 1 };
     } catch (e) {
-      lastError = e;
+      const errMsg = e instanceof Error ? e.message : String(e);
+      keyErrors.push(`Key${i + 1}: ${errMsg.slice(0, 200)}`);
+      console.warn(`[KeyRotation] Key ${i + 1} failed: ${errMsg.slice(0, 150)}`);
+
       if (isQuotaError(e)) {
-        console.warn(`[KeyRotation] ⚠️ Key ${i + 1} hit quota — ${i + 1 < keys.length ? "switching to next key" : "all keys exhausted"}`);
-        continue; // try next key immediately
+        console.warn(`[KeyRotation] → Quota detected, ${i + 1 < keys.length ? "trying next key" : "all exhausted"}`);
+        continue;
       }
-      throw e; // non-quota error → don't rotate, just throw
+      // Non-quota error on first key — still try remaining keys
+      if (i + 1 < keys.length) continue;
+      break;
     }
   }
 
-  // All keys exhausted
-  throw new Error(`ALL_KEYS_EXHAUSTED:${keys.length}`);
+  // All keys failed — throw with full per-key details
+  throw new Error(`ALL_KEYS_EXHAUSTED:${keys.length}||${keyErrors.join(" | ")}`);
 }
 
 interface ContextItem { originalIdea: string; engineeredPrompt: string; }
@@ -201,12 +206,14 @@ export async function POST(req: NextRequest) {
     if (err instanceof Error) {
       const raw = err.message;
       if (raw.startsWith("ALL_KEYS_EXHAUSTED")) {
-        const count = raw.split(":")[1] ?? keys.length;
-        message = `⚠️ All ${count} API key(s) hit quota. ${
-          Number(count) > 1
-            ? "Keys from the same Google account share quota — use keys from different Gmail accounts for true rotation."
-            : "Add more keys: GEMINI_API_KEY_2, GEMINI_API_KEY_3… in Vercel environment variables."
-        } Or wait ~1 minute.`;
+        const [meta, details] = raw.split("||");
+        const count = meta.split(":")[1] ?? String(keys.length);
+        message = `⚠️ All ${count} key(s) failed. See RAW below for exact errors per key.`;
+        return NextResponse.json({
+          error: message,
+          rawError: details ?? meta,
+          keyCount: count,
+        }, { status: 500 });
       } else if (isQuotaError(err)) {
         message = "⚠️ Rate limit hit. Please wait ~1 minute and try again.";
       } else if (raw.includes("403") || raw.includes("API_KEY_INVALID") || raw.includes("401")) {
@@ -217,6 +224,6 @@ export async function POST(req: NextRequest) {
         message = raw.slice(0, 300);
       }
     }
-    return NextResponse.json({ error: message, rawError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500) }, { status: 500 });
+    return NextResponse.json({ error: message, rawError: err instanceof Error ? err.message.slice(0, 800) : String(err).slice(0, 800) }, { status: 500 });
   }
 }
