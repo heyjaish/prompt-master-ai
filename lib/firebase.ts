@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from "firebase/app";
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -12,15 +12,23 @@ const firebaseConfig = {
   measurementId:     process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+// Guard against undefined API key at build/SSR time (Vercel static generation)
+function getFirebaseApp(): FirebaseApp | null {
+  if (!firebaseConfig.apiKey) return null;
+  return getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+}
 
-export const auth           = getAuth(app);
-export const db             = getFirestore(app);
+const app = getFirebaseApp();
+
+// Export with non-null assertion — these are only called in the browser
+// where env vars are always present (set in Vercel dashboard)
+export const auth           = app ? getAuth(app)        : null!;
+export const db             = app ? getFirestore(app)   : null!;
 export const googleProvider = new GoogleAuthProvider();
 
-// Analytics: only load in browser, never during SSR
-if (typeof window !== "undefined") {
+// Analytics: browser-only, lazy import
+if (typeof window !== "undefined" && app) {
   import("firebase/analytics").then(({ getAnalytics, isSupported }) => {
-    isSupported().then(yes => { if (yes) getAnalytics(app); });
+    isSupported().then(yes => { if (yes) getAnalytics(app!); });
   });
 }
