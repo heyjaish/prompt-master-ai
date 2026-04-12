@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
-import { Zap, Loader2, Sparkles } from "lucide-react";
+import { Zap, Loader2, Sparkles, AlertTriangle } from "lucide-react";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -16,13 +16,26 @@ export default function LoginPage() {
 
   const handleGoogle = async () => {
     setError(""); setLoading(true);
+
+    // Guard: Firebase not configured
+    if (!auth) {
+      setError("Firebase is not configured. Check environment variables.");
+      setLoading(false);
+      return;
+    }
+
     try {
       await signInWithPopup(auth, googleProvider);
       router.replace("/");
     } catch (err: unknown) {
       const code = (err as { code?: string }).code ?? "";
-      if (code !== "auth/popup-closed-by-user") {
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        // User closed popup — not an error
+      } else if (code === "auth/unauthorized-domain") {
+        setError("This domain isn't authorized in Firebase. Add it in Firebase Console → Authentication → Authorized Domains.");
+      } else {
         setError("Sign-in failed. Please try again.");
+        console.error("Google sign-in error:", err);
       }
     } finally { setLoading(false); }
   };
@@ -40,7 +53,7 @@ export default function LoginPage() {
     }}>
       <div style={{ width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", alignItems: "center", gap: 32 }}>
 
-        {/* Logo mark */}
+        {/* Logo */}
         <div style={{ textAlign: "center" }}>
           <div style={{
             width: 56, height: 56, borderRadius: 16, margin: "0 auto 18px",
@@ -51,11 +64,7 @@ export default function LoginPage() {
           }}>
             <Zap size={24} color="var(--accent-fg)" />
           </div>
-
-          <h1 style={{
-            fontSize: 26, fontWeight: 700, color: "var(--tx-1)",
-            letterSpacing: "-.025em", lineHeight: 1.2, marginBottom: 8,
-          }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--tx-1)", letterSpacing: "-.025em", lineHeight: 1.2, marginBottom: 8 }}>
             Prompt Master AI
           </h1>
           <p style={{ fontSize: 14, color: "var(--tx-2)", lineHeight: 1.6 }}>
@@ -112,8 +121,8 @@ export default function LoginPage() {
               transition: "all .2s",
               boxShadow: "0 2px 12px rgba(0,0,0,.3)",
             }}
-            onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,.4)"; } }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.borderColor = "var(--border-lg)"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,.3)"; }}
+            onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,.4)"; } }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,.3)"; }}
           >
             {loading ? (
               <Loader2 size={18} className="spin" />
@@ -133,16 +142,17 @@ export default function LoginPage() {
             <div style={{
               marginTop: 14, padding: "10px 14px", borderRadius: "var(--r2)",
               background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.25)",
-              fontSize: 13, color: "#f87171", textAlign: "center",
+              fontSize: 13, color: "#f87171",
+              display: "flex", alignItems: "flex-start", gap: 8,
             }}>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
               {error}
             </div>
           )}
 
-          {/* Terms */}
           <p style={{ fontSize: 11.5, color: "var(--tx-3)", textAlign: "center", marginTop: 18, lineHeight: 1.6 }}>
-            By continuing, you agree to our Terms of Service.<br />
-            Your data is saved securely to your Google account.
+            By continuing, you agree to our Terms of Service.
+            <br />Your prompts are saved securely to your account.
           </p>
         </div>
 

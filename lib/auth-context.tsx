@@ -18,14 +18,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    // Guard: if Firebase auth isn't initialized (missing env vars), skip gracefully
+    if (!auth) {
+      console.warn("Firebase auth not initialized — check environment variables.");
       setLoading(false);
-    });
+      return;
+    }
+
+    const unsub = onAuthStateChanged(
+      auth,
+      (u) => { setUser(u); setLoading(false); },
+      (err) => { console.error("Auth state error:", err); setLoading(false); }
+    );
     return unsub;
   }, []);
 
-  const signOut = () => firebaseSignOut(auth);
+  const signOut = async () => {
+    if (auth) await firebaseSignOut(auth);
+  };
 
   return (
     <AuthContext.Provider value={{ user, loading, signOut }}>
