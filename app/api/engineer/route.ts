@@ -25,15 +25,34 @@ DO NOT INCLUDE:
 const DEFAULT_MODEL = "gemini-2.0-flash";
 const ADMIN_KEY     = process.env.ADMIN_SECRET_KEY ?? "admin-secret-2025";
 
+// Read AI config directly from Firestore (no self-referencing HTTP call)
 async function getAIConfig() {
   try {
-    const base = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const res = await fetch(`${base}/api/public-config`, { next: { revalidate: 60 } });
-    if (!res.ok) return null;
-    return (await res.json()).aiConfig ?? null;
+    const { initializeApp, getApps, cert } = await import("firebase-admin/app");
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const projectId   = process.env.FIREBASE_ADMIN_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const pk          = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
+    if (!projectId || !clientEmail || !pk) return null;
+    const app = getApps().length ? getApps()[0] : initializeApp({ credential: cert({ projectId, clientEmail, privateKey: pk }) });
+    const snap = await getFirestore(app).collection("config").doc("ai").get();
+    return snap.exists ? snap.data() : null;
   } catch { return null; }
+}
+
+// Auto-retry on 429 quota errors with exponential backoff
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 4000): Promise<T> {
+  try {
+    return await fn();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const isQuota = msg.includes("429") || msg.includes("quota") || msg.toLowerCase().includes("too many");
+    if (isQuota && retries > 0) {
+      await new Promise(r => setTimeout(r, delayMs));
+      return withRetry(fn, retries - 1, delayMs * 2); // 4s → 8s
+    }
+    throw e;
+  }
 }
 
 interface ContextItem { originalIdea: string; engineeredPrompt: string; specialistName?: string; }
@@ -124,7 +143,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await model.generateContent(parts);
+    const result = await withRetry(() => model.generateContent(parts));
     const text   = result.response.text().trim();
 
     const tipIdx = text.lastIndexOf("\n💡");
@@ -141,8 +160,8 @@ export async function POST(req: NextRequest) {
     let message = "An unexpected error occurred. Please try again.";
     if (err instanceof Error) {
       const raw = err.message;
-      if (raw.includes("429") || raw.includes("quota"))
-        message = "⚠️ API quota exceeded. Please wait a few hours or use a fresh API key at https://aistudio.google.com/app/apikey";
+      if (raw.includes("429") || raw.includes("quota") || raw.toLowerCase().includes("too many"))
+        message = "⚠️ Rate limit hit (15 req/min on free tier). Auto-retried 2x — please wait ~1 minute and try again. Or get a fresh key: https://aistudio.google.com/app/apikey";
       else if (raw.includes("403") || raw.includes("API_KEY_INVALID") || raw.includes("401"))
         message = "🔑 Invalid API key. Check your GEMINI_API_KEY environment variable.";
       else if (raw.includes("404") || raw.includes("not found"))
