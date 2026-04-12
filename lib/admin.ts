@@ -1,6 +1,6 @@
 import {
   doc, getDoc, setDoc, collection, getDocs,
-  query, orderBy, limit, updateDoc, where,
+  query, orderBy, limit, updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -57,105 +57,134 @@ export const DEFAULT_CONFIG: AdminConfig = {
 };
 
 // ── Firestore refs ─────────────────────────────────────────────
-const cfgDoc  = () => db && doc(db, "config", "global");
-const usersCol = () => db && collection(db, "users");
-const userDoc = (uid: string) => db && doc(db, "users", uid);
+// NOTE: db can be null during SSR/build — always guard before use
+const getDb     = () => { if (!db) throw new Error("Firestore not initialized (check NEXT_PUBLIC_FIREBASE_* env vars)"); return db; };
+const cfgRef    = () => doc(getDb(), "config", "global");
+const usersRef  = () => collection(getDb(), "users");
+const userRef   = (uid: string) => doc(getDb(), "users", uid);
 
 // ── Config CRUD ────────────────────────────────────────────────
 export async function getAdminConfig(): Promise<AdminConfig> {
   try {
-    const ref = cfgDoc(); if (!ref) return DEFAULT_CONFIG;
-    const snap = await getDoc(ref);
+    const snap = await getDoc(cfgRef());
     if (!snap.exists()) return DEFAULT_CONFIG;
     return { ...DEFAULT_CONFIG, ...snap.data() } as AdminConfig;
-  } catch { return DEFAULT_CONFIG; }
+  } catch (e) {
+    console.warn("getAdminConfig failed:", e);
+    return DEFAULT_CONFIG;
+  }
 }
 
 export async function saveAdminConfig(cfg: AdminConfig): Promise<void> {
-  const ref = cfgDoc(); if (!ref) return;
-  await setDoc(ref, { ...cfg, updatedAt: Date.now() });
+  await setDoc(cfgRef(), { ...cfg, updatedAt: Date.now() });
 }
 
-// ── User CRUD ──────────────────────────────────────────────────
+// ── User CRUD — throws so admin can display the error ──────────
 export async function getAllUsers(): Promise<UserRecord[]> {
-  try {
-    const col = usersCol(); if (!col) return [];
-    const snap = await getDocs(query(col, orderBy("lastActiveAt", "desc"), limit(500)));
-    return snap.docs.map(d => ({ ...d.data(), uid: d.id }) as UserRecord);
-  } catch { return []; }
+  // This INTENTIONALLY throws so the admin panel can show the real error
+  const snap = await getDocs(query(usersRef(), orderBy("lastActiveAt", "desc"), limit(500)));
+  return snap.docs.map(d => ({ uid: d.id, ...d.data() }) as UserRecord);
 }
 
 export async function updateUserRecord(uid: string, data: Partial<UserRecord>): Promise<void> {
-  const ref = userDoc(uid); if (!ref) return;
-  await updateDoc(ref, data as Record<string, unknown>);
+  await updateDoc(userRef(uid), data as Record<string, unknown>);
 }
 
-// ── Register / update user profile on login ────────────────────
+// ── Register / update user on login ───────────────────────────
 export async function registerUser(user: {
   uid: string; email: string; name: string;
   photoURL: string; provider: string;
 }): Promise<{ allowed: boolean; reason?: string }> {
   try {
-    const ref = userDoc(user.uid); if (!ref) return { allowed: true };
+    const ref  = userRef(user.uid);
     const [snap, cfgSnap] = await Promise.all([
       getDoc(ref),
-      cfgDoc() ? getDoc(cfgDoc()!) : Promise.resolve(null),
+      getDoc(cfgRef()).catch(() => null),
     ]);
-    const cfg = (cfgSnap?.exists() ? { ...DEFAULT_CONFIG, ...cfgSnap.data() } : DEFAULT_CONFIG) as AdminConfig;
 
-    // Check maintenance
-    if (cfg.maintenance.enabled) return { allowed: false, reason: cfg.maintenance.message };
+    const cfg = (cfgSnap?.exists()
+      ? { ...DEFAULT_CONFIG, ...cfgSnap.data() }
+      : DEFAULT_CONFIG) as AdminConfig;
+
+    if (cfg.maintenance.enabled) {
+      return { allowed: false, reason: cfg.maintenance.message };
+    }
 
     const now = Date.now();
     if (!snap.exists()) {
       await setDoc(ref, {
-        ...user, role: "user", status: "active", plan: "free",
-        totalPrompts: 0, dailyPrompts: 0,
-        dailyDate: new Date().toISOString().slice(0, 10),
-        createdAt: now, lastActiveAt: now, note: "",
+        uid:          user.uid,
+        email:        user.email,
+        name:         user.name,
+        photoURL:     user.photoURL,
+        provider:     user.provider,
+        role:         "user",
+        status:       "active",
+        plan:         "free",
+        totalPrompts: 0,
+        dailyPrompts: 0,
+        dailyDate:    new Date().toISOString().slice(0, 10),
+        createdAt:    now,
+        lastActiveAt: now,
+        note:         "",
       });
+      console.log("[Admin] New user registered:", user.email);
     } else {
       const existing = snap.data() as UserRecord;
-      if (existing.status === "banned") return { allowed: false, reason: "Your account has been banned." };
-      if (existing.status === "suspended") return { allowed: false, reason: "Your account is suspended." };
-      await updateDoc(ref, { lastActiveAt: now, name: user.name, photoURL: user.photoURL });
+      if (existing.status === "banned")     return { allowed: false, reason: "Your account has been banned." };
+      if (existing.status === "suspended")  return { allowed: false, reason: "Your account is suspended." };
+      await updateDoc(ref, {
+        lastActiveAt: now,
+        name:         user.name,
+        photoURL:     user.photoURL,
+      });
     }
     return { allowed: true };
-  } catch { return { allowed: true }; }
+  } catch (e) {
+    console.error("[Admin] registerUser error:", e);
+    return { allowed: true }; // Don't block login on Firestore write failure
+  }
 }
 
-// ── Check & increment prompt usage ────────────────────────────
+// ── Check & increment usage ────────────────────────────────────
 export async function checkAndIncrementPrompt(uid: string): Promise<{
   allowed: boolean; remaining: number; reason?: string;
 }> {
   try {
-    const ref = userDoc(uid); if (!ref) return { allowed: true, remaining: 999 };
     const [snap, cfgSnap] = await Promise.all([
-      getDoc(ref),
-      cfgDoc() ? getDoc(cfgDoc()!) : Promise.resolve(null),
+      getDoc(userRef(uid)),
+      getDoc(cfgRef()).catch(() => null),
     ]);
-    const cfg  = (cfgSnap?.exists() ? { ...DEFAULT_CONFIG, ...cfgSnap.data() } : DEFAULT_CONFIG) as AdminConfig;
+    const cfg  = (cfgSnap?.exists()
+      ? { ...DEFAULT_CONFIG, ...cfgSnap.data() }
+      : DEFAULT_CONFIG) as AdminConfig;
     const user = snap.exists() ? (snap.data() as UserRecord) : null;
 
     if (!user) return { allowed: true, remaining: 99 };
-    if (user.status !== "active") return { allowed: false, remaining: 0, reason: "Account suspended or banned." };
+    if (user.status !== "active") {
+      return { allowed: false, remaining: 0, reason: "Account suspended or banned." };
+    }
 
     const dailyLimit = cfg.limits[user.plan as UserPlan] ?? cfg.limits.free;
     if (dailyLimit === -1) {
-      await updateDoc(ref, { totalPrompts: (user.totalPrompts??0)+1, lastActiveAt: Date.now() });
+      await updateDoc(userRef(uid), { totalPrompts: (user.totalPrompts ?? 0) + 1, lastActiveAt: Date.now() });
       return { allowed: true, remaining: -1 };
     }
 
     const today = new Date().toISOString().slice(0, 10);
     const daily = user.dailyDate === today ? (user.dailyPrompts ?? 0) : 0;
     if (daily >= dailyLimit) {
-      return { allowed: false, remaining: 0, reason: `Daily limit of ${dailyLimit} prompts reached. Upgrade your plan for more.` };
+      return { allowed: false, remaining: 0, reason: `Daily limit of ${dailyLimit} prompts reached.` };
     }
 
-    await updateDoc(ref, {
-      dailyPrompts: daily + 1, dailyDate: today,
-      totalPrompts: (user.totalPrompts??0)+1, lastActiveAt: Date.now(),
+    await updateDoc(userRef(uid), {
+      dailyPrompts: daily + 1,
+      dailyDate:    today,
+      totalPrompts: (user.totalPrompts ?? 0) + 1,
+      lastActiveAt: Date.now(),
     });
     return { allowed: true, remaining: dailyLimit - (daily + 1) };
-  } catch { return { allowed: true, remaining: 99 }; }
+  } catch {
+    return { allowed: true, remaining: 99 };
+  }
 }
