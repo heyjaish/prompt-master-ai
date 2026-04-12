@@ -5,6 +5,9 @@ import type { Firestore } from "firebase-admin/firestore";
 let _app: App | null = null;
 let _db: Firestore | null = null;
 
+// ── Protected admin emails — CANNOT be banned/suspended/deleted ─
+const PROTECTED_EMAILS = ["jaishkumar55@gmail.com"];
+
 async function getAdminDb(): Promise<Firestore> {
   if (_db) return _db;
   const { initializeApp, getApps, cert } = await import("firebase-admin/app");
@@ -18,12 +21,12 @@ async function getAdminDb(): Promise<Firestore> {
   return _db;
 }
 
-function auth(req: NextRequest) {
+function authOk(req: NextRequest) {
   return req.headers.get("x-admin-key") === process.env.ADMIN_SECRET_KEY;
 }
 
 export async function GET(req: NextRequest) {
-  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!authOk(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const action = new URL(req.url).searchParams.get("action");
   try {
     const db = await getAdminDb();
@@ -34,8 +37,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === "config") {
-      const snap = await db.collection("config").doc("global").get();
-      return NextResponse.json({ config: snap.exists ? snap.data() : null });
+      const [global, contact] = await Promise.all([
+        db.collection("config").doc("global").get(),
+        db.collection("config").doc("contact").get(),
+      ]);
+      return NextResponse.json({
+        config:  global.exists  ? global.data()  : null,
+        contact: contact.exists ? contact.data() : null,
+      });
     }
 
     if (action === "aiConfig") {
@@ -52,25 +61,31 @@ export async function GET(req: NextRequest) {
       const usersSnap = await db.collection("users").get();
       const users = usersSnap.docs.map(d => d.data());
       const today = new Date().toISOString().slice(0, 10);
-      // Build last 7 days stats from users dailyDate/dailyPrompts
       const days: Record<string, number> = {};
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
         days[d.toISOString().slice(0, 10)] = 0;
       }
       users.forEach((u: Record<string, unknown>) => {
-        if (u.dailyDate && days[u.dailyDate as string] !== undefined) {
+        if (u.dailyDate && days[u.dailyDate as string] !== undefined)
           days[u.dailyDate as string] += (u.dailyPrompts as number) || 0;
-        }
       });
       const topUsers = [...users]
         .sort((a: Record<string, unknown>, b: Record<string, unknown>) => ((b.totalPrompts as number) || 0) - ((a.totalPrompts as number) || 0))
         .slice(0, 10)
-        .map((u: Record<string, unknown>) => ({ name: u.name, email: u.email, totalPrompts: u.totalPrompts, plan: u.plan, photoURL: u.photoURL }));
+        .map((u: Record<string, unknown>) => ({ name: u.name, email: u.email, totalPrompts: u.totalPrompts, plan: u.plan, photoURL: u.photoURL, tags: u.tags }));
+      // New users this week
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const newThisWeek = users.filter((u: Record<string, unknown>) => (u.createdAt as number) > weekAgo).length;
+      // Avg prompts per user
+      const avgPrompts = users.length ? Math.round(users.reduce((s: number, u: Record<string, unknown>) => s + ((u.totalPrompts as number) || 0), 0) / users.length) : 0;
       return NextResponse.json({
         totalUsers:   users.length,
         activeUsers:  users.filter((u: Record<string, unknown>) => u.status === "active").length,
         bannedUsers:  users.filter((u: Record<string, unknown>) => u.status === "banned").length,
+        suspendedUsers: users.filter((u: Record<string, unknown>) => u.status === "suspended").length,
+        newThisWeek,
+        avgPrompts,
         totalPrompts: users.reduce((s: number, u: Record<string, unknown>) => s + ((u.totalPrompts as number) || 0), 0),
         todayPrompts: users.filter((u: Record<string, unknown>) => u.dailyDate === today).reduce((s: number, u: Record<string, unknown>) => s + ((u.dailyPrompts as number) || 0), 0),
         planDist: {
@@ -91,9 +106,9 @@ export async function GET(req: NextRequest) {
       const snap = await db.collection("users").get();
       const rows = snap.docs.map(d => {
         const u = d.data();
-        return [u.name, u.email, u.plan, u.status, u.role, u.totalPrompts, u.dailyPrompts, u.provider, new Date(u.createdAt || 0).toLocaleDateString()].join(",");
+        return [u.name, u.email, u.plan, u.status, u.role, u.totalPrompts, u.dailyPrompts, u.provider, (u.tags||[]).join("|"), new Date(u.createdAt || 0).toLocaleDateString()].join(",");
       });
-      const csv = ["Name,Email,Plan,Status,Role,TotalPrompts,DailyPrompts,Provider,Joined", ...rows].join("\n");
+      const csv = ["Name,Email,Plan,Status,Role,TotalPrompts,DailyPrompts,Provider,Tags,Joined", ...rows].join("\n");
       return new NextResponse(csv, { headers: { "Content-Type": "text/csv", "Content-Disposition": "attachment; filename=users.csv" } });
     }
 
@@ -105,7 +120,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!auth(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!authOk(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body   = await req.json();
     const db     = await getAdminDb();
@@ -117,7 +132,7 @@ export async function POST(req: NextRequest) {
       const snap = await ref.get();
       if (!snap.exists) {
         const now = Date.now();
-        await ref.set({ uid, email, name, photoURL, provider, role: "user", status: "active", plan: "free", totalPrompts: 0, dailyPrompts: 0, dailyDate: new Date().toISOString().slice(0, 10), createdAt: now, lastActiveAt: now, note: "", customDailyLimit: null });
+        await ref.set({ uid, email, name, photoURL, provider, role: "user", status: "active", plan: "free", totalPrompts: 0, dailyPrompts: 0, dailyDate: new Date().toISOString().slice(0, 10), createdAt: now, lastActiveAt: now, note: "", customDailyLimit: null, tags: [] });
         return NextResponse.json({ ok: true, isNew: true });
       } else {
         const data = snap.data()!;
@@ -129,12 +144,27 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "updateUser" && body.uid) {
+      // ── Protect admin email from being banned/suspended/deleted ──
+      if (body.data?.status && body.data.status !== "active") {
+        const userSnap = await db.collection("users").doc(body.uid).get();
+        if (userSnap.exists) {
+          const email = userSnap.data()!.email as string;
+          if (PROTECTED_EMAILS.includes(email)) {
+            return NextResponse.json({ error: `🛡️ Cannot change status of protected admin account (${email})` }, { status: 403 });
+          }
+        }
+      }
       await db.collection("users").doc(body.uid).update({ ...body.data, updatedAt: Date.now() });
       return NextResponse.json({ ok: true });
     }
 
     if (action === "saveConfig" && body.config) {
       await db.collection("config").doc("global").set({ ...body.config, updatedAt: Date.now() });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "saveContact" && body.contact) {
+      await db.collection("config").doc("contact").set({ ...body.contact, updatedAt: Date.now() });
       return NextResponse.json({ ok: true });
     }
 
@@ -158,6 +188,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "deleteUser" && body.uid) {
+      // Protect admin email from deletion too
+      const userSnap = await db.collection("users").doc(body.uid).get();
+      if (userSnap.exists && PROTECTED_EMAILS.includes(userSnap.data()!.email)) {
+        return NextResponse.json({ error: "🛡️ Cannot delete protected admin account." }, { status: 403 });
+      }
       await db.collection("users").doc(body.uid).delete();
       return NextResponse.json({ ok: true });
     }
@@ -170,18 +205,27 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "bulkUpdateStatus" && body.uids && body.status) {
+      // Filter out protected emails from bulk ban
+      const protectedSnaps = await Promise.all(
+        (body.uids as string[]).map(uid => db.collection("users").doc(uid).get())
+      );
+      const safeUids = (body.uids as string[]).filter((uid, i) => {
+        const email = protectedSnaps[i].data()?.email as string;
+        return !PROTECTED_EMAILS.includes(email);
+      });
+      if (safeUids.length === 0) return NextResponse.json({ error: "🛡️ All selected users are protected admins." }, { status: 403 });
       const batch = db.batch();
-      (body.uids as string[]).forEach(uid => batch.update(db.collection("users").doc(uid), { status: body.status }));
+      safeUids.forEach(uid => batch.update(db.collection("users").doc(uid), { status: body.status }));
       await batch.commit();
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, skipped: (body.uids as string[]).length - safeUids.length });
     }
 
     if (action === "checkPrompt" && body.uid) {
       const ref  = db.collection("users").doc(body.uid);
       const snap = await ref.get();
       if (!snap.exists) return NextResponse.json({ allowed: true, remaining: 99 });
-      const u    = snap.data()!;
-      const cfg  = await db.collection("config").doc("global").get();
+      const u   = snap.data()!;
+      const cfg = await db.collection("config").doc("global").get();
       const limits = cfg.exists ? (cfg.data()!.limits || { free:10, pro:100, unlimited:-1 }) : { free:10, pro:100, unlimited:-1 };
       if (u.status !== "active") return NextResponse.json({ allowed: false, remaining: 0, reason: "Account suspended/banned." });
       const dailyLimit = u.customDailyLimit ?? limits[u.plan as string] ?? limits.free;
@@ -191,7 +235,7 @@ export async function POST(req: NextRequest) {
       }
       const today = new Date().toISOString().slice(0, 10);
       const daily = u.dailyDate === today ? (u.dailyPrompts || 0) : 0;
-      if (daily >= dailyLimit) return NextResponse.json({ allowed: false, remaining: 0, reason: `Daily limit of ${dailyLimit} reached.` });
+      if (daily >= dailyLimit) return NextResponse.json({ allowed: false, remaining: 0, reason: `Daily limit of ${dailyLimit} prompts reached. Upgrade your plan for more.` });
       await ref.update({ dailyPrompts: daily+1, dailyDate: today, totalPrompts: (u.totalPrompts||0)+1, lastActiveAt: Date.now() });
       return NextResponse.json({ allowed: true, remaining: dailyLimit - (daily+1) });
     }

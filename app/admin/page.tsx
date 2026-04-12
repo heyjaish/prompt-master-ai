@@ -115,6 +115,7 @@ export default function AdminPage() {
   const [cfg,setCfg]        = useState<GlobalConfig>(DEFAULT_CFG);
   const [aiCfg,setAiCfg]   = useState<AIConfig>(DEFAULT_AI);
   const [ann,setAnn]        = useState<Announcement>(DEFAULT_ANN);
+  const [contact,setContact]= useState({email:"jaishkumar55@gmail.com",message:"Please contact admin for help.",supportUrl:""});
   const [dl,setDl]          = useState(false);
   const [saving,setSaving]  = useState(false);
   const [err,setErr]        = useState<string|null>(null);
@@ -137,6 +138,7 @@ export default function AdminPage() {
       const [ud,cd,ad,acd,annd]=await Promise.all([ag("users"),ag("config"),ag("analytics"),ag("aiConfig"),ag("announcement")]);
       setUsers(ud.users??[]);
       if(cd.config) setCfg({...DEFAULT_CFG,...cd.config});
+      if(cd.contact) setContact(c=>({...c,...cd.contact}));
       setAna(ad);
       if(acd.aiConfig) setAiCfg({...DEFAULT_AI,...acd.aiConfig});
       if(annd.announcement) setAnn({...DEFAULT_ANN,...annd.announcement});
@@ -224,14 +226,15 @@ export default function AdminPage() {
   const handleSaveCfg=async()=>{setSaving(true);try{await ap({action:"saveConfig",config:cfg});st("✅ Configuration saved!");}catch(e){st("❌ "+(e instanceof Error?e.message:e));}finally{setSaving(false);}};
   const handleSaveAI=async()=>{setSaving(true);try{await ap({action:"saveAIConfig",aiConfig:aiCfg});st("✅ AI Config saved!");}catch(e){st("❌ "+(e instanceof Error?e.message:e));}finally{setSaving(false);}};
   const handleSaveAnn=async()=>{setSaving(true);try{await ap({action:"saveAnnouncement",announcement:ann});st("✅ Announcement saved!");}catch(e){st("❌ "+(e instanceof Error?e.message:e));}finally{setSaving(false);}};
+  const handleSaveContact=async()=>{setSaving(true);try{await ap({action:"saveContact",contact});st("✅ Contact info saved!");}catch(e){st("❌ "+(e instanceof Error?e.message:e));}finally{setSaving(false);}};
   const exportCSV=async()=>{
     try{ const r=await fetch("/api/admin?action=exportCSV",{headers:{"x-admin-key":ADMIN_KEY}}); const blob=await r.blob(); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="users.csv"; a.click(); st("✅ CSV downloaded!"); }
     catch(e){ st("❌ Export failed"); }
   };
   const toggleSelect=(uid:string)=>{ setSelectable(p=>{const n=new Set(p);n.has(uid)?n.delete(uid):n.add(uid);return n;}); };
   const selectAll=()=>{ setSelectable(filtered.length===selected.size?new Set():new Set(filtered.map(u=>u.uid))); };
-  const showSave = ["features","limits","settings"].includes(tab);
-  const onSave = ()=>{ if(tab==="features"||tab==="limits"||tab==="settings") handleSaveCfg(); if(tab==="aiconfig") handleSaveAI(); if(tab==="announcements") handleSaveAnn(); };
+  const showSave = ["features","limits","settings","aiconfig","announcements"].includes(tab);
+  const onSave = async()=>{ if(tab==="features"||tab==="limits") handleSaveCfg(); if(tab==="settings"){ await handleSaveCfg(); await handleSaveContact(); } if(tab==="aiconfig") handleSaveAI(); if(tab==="announcements") handleSaveAnn(); };
 
   return (
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:"var(--bg)",fontFamily:"Inter,sans-serif"}}>
@@ -667,6 +670,39 @@ export default function AdminPage() {
                     <Note type="red">⚠️ Maintenance Mode is ON — no one can log in. Remember to Save Changes!</Note>
                   </div>
                 )}
+              </div>
+              {/* Contact Info — shown to banned users */}
+              <div style={{background:S.card,border:`1px solid rgba(99,102,241,.2)`,borderRadius:S.bdR,padding:20,borderLeft:"3px solid #6366f1"}}>
+                <div style={{fontSize:13.5,fontWeight:700,color:S.tx1,marginBottom:4}}>📬 Contact Info for Banned Users</div>
+                <div style={{fontSize:12,color:S.tx3,marginBottom:14}}>Shown when a user's account is blocked. Lets them contact you directly.</div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div>
+                    <label style={{fontSize:12,fontWeight:600,color:S.tx2,display:"block",marginBottom:5}}>Contact Email</label>
+                    <input value={contact.email} onChange={e=>setContact(c=>({...c,email:e.target.value}))}
+                      style={{width:"100%",background:"rgba(255,255,255,.05)",border:`1px solid ${S.border}`,borderRadius:9,color:S.tx1,fontSize:13,padding:"9px 12px",outline:"none"}}
+                      placeholder="your@email.com"/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:12,fontWeight:600,color:S.tx2,display:"block",marginBottom:5}}>Message to Banned Users</label>
+                    <textarea value={contact.message} onChange={e=>setContact(c=>({...c,message:e.target.value}))} rows={2}
+                      style={{width:"100%",background:"rgba(255,255,255,.05)",border:`1px solid ${S.border}`,borderRadius:9,color:S.tx1,fontSize:13,padding:"9px 12px",outline:"none",resize:"vertical"}}
+                      placeholder="e.g. Your account was banned for violating our terms. Email us to appeal."/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:12,fontWeight:600,color:S.tx2,display:"block",marginBottom:5}}>Support URL <span style={{fontWeight:400,color:S.tx3}}>(optional)</span></label>
+                    <input value={contact.supportUrl} onChange={e=>setContact(c=>({...c,supportUrl:e.target.value}))}
+                      style={{width:"100%",background:"rgba(255,255,255,.05)",border:`1px solid ${S.border}`,borderRadius:9,color:S.tx1,fontSize:13,padding:"9px 12px",outline:"none"}}
+                      placeholder="https://yoursite.com/support"/>
+                  </div>
+                </div>
+              </div>
+              {/* Admin protection notice */}
+              <div style={{background:"rgba(245,158,11,.07)",border:"1px solid rgba(245,158,11,.2)",borderRadius:S.bdR,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:10}}>
+                <span style={{fontSize:18,flexShrink:0}}>🛡️</span>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#fbbf24",marginBottom:4}}>Protected Admin Account</div>
+                  <div style={{fontSize:12.5,color:S.tx2,lineHeight:1.6}}><strong style={{color:"#fbbf24"}}>{ADMIN_EMAIL}</strong> cannot be banned, suspended, or deleted — even by accident. This protection is hardcoded on the server.</div>
+                </div>
               </div>
               {/* Danger zone */}
               <div style={{background:S.card,border:"1px solid rgba(239,68,68,.2)",borderRadius:S.bdR,padding:20}}>
