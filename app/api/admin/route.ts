@@ -102,6 +102,15 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    if (action === "errors") {
+      const snap = await db.collection("errors")
+        .orderBy("timestamp", "desc")
+        .limit(100)
+        .get();
+      const errors = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return NextResponse.json({ errors });
+    }
+
     if (action === "exportCSV") {
       const snap = await db.collection("users").get();
       const rows = snap.docs.map(d => {
@@ -155,6 +164,24 @@ export async function POST(req: NextRequest) {
         }
       }
       await db.collection("users").doc(body.uid).update({ ...body.data, updatedAt: Date.now() });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "logError") {
+      // Log any error from any user — fire-and-forget from engineer route
+      const { uid, email, errorType, errorMessage, specialist, modelUsed, url } = body;
+      const ref = db.collection("errors").doc();
+      await ref.set({
+        uid:          uid          ?? "anonymous",
+        email:        email        ?? "unknown",
+        errorType:    errorType    ?? "unknown",
+        errorMessage: (errorMessage ?? "").slice(0, 500),
+        specialist:   specialist   ?? null,
+        modelUsed:    modelUsed    ?? null,
+        url:          url          ?? null,
+        timestamp:    Date.now(),
+        resolved:     false,
+      });
       return NextResponse.json({ ok: true });
     }
 

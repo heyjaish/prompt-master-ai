@@ -7,7 +7,7 @@ import {
   ArrowLeft, Shield, Search, RefreshCw, Save, Ban, UserCheck,
   Crown, TrendingUp, Activity, AlertTriangle, Download, Megaphone,
   Bot, ChevronDown, ChevronUp, Trash2, CheckSquare, Square,
-  BarChart2, Zap, Lock, Unlock, Globe, Bell,
+  BarChart2, Zap, Lock, Unlock, Globe, Bell, AlertCircle, CheckCircle, XCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -16,7 +16,19 @@ const ADMIN_EMAIL    = "jaishkumar55@gmail.com";
 const ADMIN_PASSWORD = "PromptMaster@2025";
 const ADMIN_KEY      = process.env.NEXT_PUBLIC_ADMIN_SECRET_KEY ?? "admin-secret-2025";
 
-type Tab = "overview"|"analytics"|"users"|"features"|"aiconfig"|"announcements"|"limits"|"settings"|"analyst";
+type Tab = "overview"|"analytics"|"users"|"features"|"aiconfig"|"announcements"|"limits"|"settings"|"analyst"|"errors";
+
+interface ErrorLog {
+  id: string;
+  uid: string;
+  email: string;
+  errorType: string;
+  errorMessage: string;
+  specialist?: string | null;
+  modelUsed?: string | null;
+  timestamp: number;
+  resolved: boolean;
+}
 
 // ── Types ──────────────────────────────────────────────────────
 interface UserRow {
@@ -132,6 +144,8 @@ export default function AdminPage() {
   const [analystQ, setAnalystQ]               = useState("");
   const [analystCache, setAnalystCache]       = useState<Record<string,unknown>|null>(null);
   const [analystTime, setAnalystTime]         = useState<number|null>(null);
+  const [errorLogs, setErrorLogs]             = useState<ErrorLog[]>([]);
+  const [errLogsLoading, setErrLogsLoading]   = useState(false);
 
   const isAdmin = useMemo(()=>user?.email?.toLowerCase()===ADMIN_EMAIL.toLowerCase(),[user]);
   const st=(m:string)=>{setToast(m);setTimeout(()=>setToast(""),3200);};
@@ -150,6 +164,16 @@ export default function AdminPage() {
     } catch(e:unknown){ setErr(e instanceof Error?e.message:String(e)); }
     finally{ setDl(false); }
   },[isAdmin,pwOk]);
+
+  const loadErrors = useCallback(async () => {
+    if (!isAdmin || !pwOk) return;
+    setErrLogsLoading(true);
+    try {
+      const d = await ag("errors");
+      setErrorLogs(d.errors ?? []);
+    } catch { /* silent */ }
+    finally { setErrLogsLoading(false); }
+  }, [isAdmin, pwOk]);
 
   useEffect(()=>{if(!loading&&!user){router.replace("/login");return;} if(!loading&&user&&isAdmin&&pwOk)load();},[user,loading,isAdmin,pwOk,load,router]);
 
@@ -202,6 +226,7 @@ export default function AdminPage() {
     ["overview","Overview",<LayoutDashboard size={13}/>],
     ["analytics","Analytics",<BarChart2 size={13}/>],
     ["users","Users",<Users size={13}/>],
+    ["errors","🔴 Errors",<AlertCircle size={13}/>],
     ["analyst","🤖 AI Analyst",<Zap size={13}/>],
     ["features","Features",<ToggleRight size={13}/>],
     ["aiconfig","AI Config",<Bot size={13}/>],
@@ -276,6 +301,7 @@ export default function AdminPage() {
               {tab==="overview"&&`${totalU} users · ${totalP} total prompts`}
               {tab==="analytics"&&"Usage data & charts"}
               {tab==="users"&&`${filtered.length} of ${totalU} users`}
+              {tab==="errors"&&`${errorLogs.filter(e=>!e.resolved).length} unresolved · ${errorLogs.length} total`}
               {tab==="features"&&"Toggle app features globally"}
               {tab==="aiconfig"&&"Gemini model & generation settings"}
               {tab==="announcements"&&"Banner shown to all users"}
@@ -792,6 +818,94 @@ export default function AdminPage() {
                 </div>
               </div>
               <div style={{fontSize:11.5,color:S.tx3,textAlign:"center"}}>🔒 Only anonymized stats sent to Gemini — no emails or user IDs shared.</div>
+            </div>
+          )}
+            </div>
+          )}
+
+          {/* ── ERROR MONITOR ── */}
+          {tab==="errors" && (
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              {/* Header row */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color:S.tx1}}>🔴 User Error Monitor</div>
+                  <div style={{fontSize:12,color:S.tx3,marginTop:3}}>Every error any user hits is automatically logged here in real-time.</div>
+                </div>
+                <button onClick={loadErrors} disabled={errLogsLoading} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:9,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.04)",color:S.tx2,fontSize:12.5,cursor:"pointer"}}>
+                  <RefreshCw size={12} style={{animation:errLogsLoading?"spin 1s linear infinite":undefined}}/> {errLogsLoading?"Loading…":"Refresh"}
+                </button>
+              </div>
+
+              {/* Stats Summary */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+                {[
+                  {label:"Total Errors",val:errorLogs.length,color:"#f87171"},
+                  {label:"Unresolved",val:errorLogs.filter(e=>!e.resolved).length,color:"#fbbf24"},
+                  {label:"Quota Errors",val:errorLogs.filter(e=>e.errorType==="quota_exhausted"||e.errorType==="rate_limit").length,color:"#f59e0b"},
+                  {label:"Key Errors",val:errorLogs.filter(e=>e.errorType==="invalid_key").length,color:"#a78bfa"},
+                ].map(({label,val,color})=>(
+                  <div key={label} style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:12,padding:"14px 16px"}}>
+                    <div style={{fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:S.tx3,marginBottom:6}}>{label}</div>
+                    <div style={{fontSize:26,fontWeight:800,color}}>{val}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Error Log Table */}
+              <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:S.bdR,overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:`1px solid ${S.border}`,display:"flex",alignItems:"center",gap:8}}>
+                  <AlertCircle size={13} color="#f87171"/>
+                  <span style={{fontSize:13,fontWeight:600,color:S.tx1}}>Recent Errors</span>
+                  <span style={{fontSize:11,color:S.tx3,marginLeft:"auto"}}>Most recent first · auto-logged from all users</span>
+                </div>
+
+                {errLogsLoading ? (
+                  <div style={{padding:"32px",textAlign:"center",color:S.tx3,fontSize:13}}>⏳ Loading errors…</div>
+                ) : errorLogs.length === 0 ? (
+                  <div style={{padding:"40px",textAlign:"center"}}>
+                    <div style={{fontSize:36,marginBottom:10}}>✅</div>
+                    <div style={{fontSize:14,fontWeight:600,color:S.tx1,marginBottom:6}}>No errors logged</div>
+                    <div style={{fontSize:12.5,color:S.tx3}}>Click Refresh to load — errors appear here automatically when users hit issues.</div>
+                  </div>
+                ) : (
+                  <div style={{overflowY:"auto",maxHeight:520}}>
+                    {errorLogs.map((e,idx)=>{
+                      const typeColor = e.errorType==="quota_exhausted"?"#f59e0b":e.errorType==="rate_limit"?"#fbbf24":e.errorType==="invalid_key"?"#a78bfa":"#f87171";
+                      const typeBg   = e.errorType==="quota_exhausted"?"rgba(245,158,11,.1)":e.errorType==="rate_limit"?"rgba(251,191,36,.1)":e.errorType==="invalid_key"?"rgba(167,139,250,.1)":"rgba(239,68,68,.1)";
+                      const typeLabel= e.errorType==="quota_exhausted"?"⛽ Quota":e.errorType==="rate_limit"?"⚡ Rate Limit":e.errorType==="invalid_key"?"🔑 Bad Key":"⚠️ API Error";
+                      return (
+                        <div key={e.id} style={{padding:"13px 16px",borderBottom:idx<errorLogs.length-1?`1px solid ${S.border}`:"none",display:"flex",flexDirection:"column",gap:6,background:e.resolved?"rgba(34,197,94,.03)":"transparent",opacity:e.resolved?.6:1}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                            {/* Type badge */}
+                            <span style={{fontSize:10.5,fontWeight:700,padding:"2px 8px",borderRadius:6,background:typeBg,color:typeColor,border:`1px solid ${typeColor}33`}}>{typeLabel}</span>
+                            {/* UID */}
+                            <span style={{fontSize:11.5,color:S.tx3,fontFamily:"monospace"}}>{e.uid?.slice(0,16)}…</span>
+                            {/* Specialist */}
+                            {e.specialist&&<span style={{fontSize:11,color:"#818cf8",background:"rgba(99,102,241,.1)",padding:"1px 7px",borderRadius:10}}>📌 {e.specialist}</span>}
+                            {/* Model */}
+                            {e.modelUsed&&<span style={{fontSize:11,color:"#64748b",background:"rgba(255,255,255,.04)",padding:"1px 7px",borderRadius:10}}>{e.modelUsed}</span>}
+                            {/* Resolved */}
+                            {e.resolved&&<span style={{fontSize:10.5,color:"#4ade80",background:"rgba(34,197,94,.1)",padding:"1px 7px",borderRadius:10}}>✓ Resolved</span>}
+                            {/* Time */}
+                            <span style={{fontSize:11,color:S.tx3,marginLeft:"auto"}}>{new Date(e.timestamp).toLocaleString()}</span>
+                            {/* Resolve button */}
+                            {!e.resolved&&<button
+                              onClick={async()=>{try{await ap({action:"logError",uid:e.uid,email:e.email,errorType:"resolved",errorMessage:e.errorMessage,specialist:e.specialist,modelUsed:e.modelUsed});setErrorLogs(p=>p.map((x,i)=>i===idx?{...x,resolved:true}:x));st("✅ Marked resolved");}catch{st("❌ Failed");}}}
+                              style={{fontSize:10.5,padding:"2px 9px",borderRadius:6,border:"1px solid rgba(34,197,94,.3)",background:"rgba(34,197,94,.08)",color:"#4ade80",cursor:"pointer"}}
+                            ><CheckCircle size={9}/> Resolve</button>}
+                          </div>
+                          {/* Error message */}
+                          <div style={{fontSize:12,color:"#fca5a5",background:"rgba(239,68,68,.06)",padding:"6px 10px",borderRadius:7,border:"1px solid rgba(239,68,68,.12)",fontFamily:"monospace",whiteSpace:"pre-wrap",wordBreak:"break-all",lineHeight:1.5}}>
+                            {e.errorMessage?.slice(0,300)}{e.errorMessage?.length>300?"…":""}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{fontSize:11.5,color:S.tx3,textAlign:"center"}}>💡 Errors auto-log from every API call. Refresh to see latest.</div>
             </div>
           )}
         </div>
