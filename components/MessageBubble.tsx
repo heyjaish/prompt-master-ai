@@ -12,14 +12,19 @@ function fmt(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function Dots() {
+function LoadingCard() {
   return (
-    <div style={{ display: "flex", gap: 5, alignItems: "center", padding: "8px 4px" }}>
-      {[0,1,2].map(i => (
-        <span key={i} className="dot" style={{
-          width: 7, height: 7, borderRadius: "50%",
-          background: "var(--tx-3)", display: "inline-block",
-        }} />
+    <div className="loading-card anim-in">
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 5 }}>
+          <span className="dot" />
+          <span className="dot" />
+          <span className="dot" />
+        </div>
+        <span style={{ fontSize: 12, color: "var(--tx-3)" }}>Engineering your prompt…</span>
+      </div>
+      {[100, 80, 90, 60, 75].map((w, i) => (
+        <div key={i} className="shimmer-line" style={{ width: `${w}%`, animationDelay: `${i * .1}s` }} />
       ))}
     </div>
   );
@@ -30,15 +35,13 @@ export default function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className={`msg-row anim-up${isUser ? " user" : ""}`}>
-      {/* Avatar */}
       <div className={`avatar ${isUser ? "avatar-user" : "avatar-ai"}`}>
         {isUser ? "U" : "AI"}
       </div>
 
-      {/* Content */}
       <div style={{ flex: 1, minWidth: 0, maxWidth: "calc(100% - 42px)", display: "flex", flexDirection: "column", gap: 8 }}>
         {isUser ? (
-          <div style={{ display: "flex", justifyContent: "flex-end", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
             {message.images && message.images.length > 0 && (
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {message.images.map((img, i) => (
@@ -54,19 +57,10 @@ export default function MessageBubble({ message }: { message: Message }) {
           </div>
         ) : (
           <>
-            {message.isLoading && <Dots />}
+            {message.isLoading && <LoadingCard />}
 
             {!message.isLoading && message.engineeredPrompt && (
-              <CopyableBlock content={message.engineeredPrompt} />
-            )}
-
-            {!message.isLoading && message.explanation && (
-              <div className="why-box">
-                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--tx-3)", marginBottom: 5 }}>
-                  Why this works
-                </div>
-                {message.explanation}
-              </div>
+              <CopyableBlock content={message.engineeredPrompt} explanation={message.explanation} />
             )}
 
             {!message.isLoading && !message.engineeredPrompt && message.content && (

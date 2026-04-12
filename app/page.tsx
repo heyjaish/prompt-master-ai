@@ -10,15 +10,32 @@ import ChatInput, { UploadedImage } from "@/components/ChatInput";
 import MessageBubble, { Message } from "@/components/MessageBubble";
 import TemplateButtons from "@/components/TemplateButtons";
 import SplitPreview from "@/components/SplitPreview";
-import { HistoryEntry, loadHistory, saveToHistory } from "@/lib/history";
+import { HistoryEntry, loadHistory, saveToHistory, detectCategory } from "@/lib/history";
 
 type ViewMode = "chat" | "split";
+
+// Quick Action chips — appended to the prompt
+const QUICK_ACTIONS = [
+  { label: "16:9 Ratio",      value: "aspect ratio 16:9" },
+  { label: "9:16 Vertical",   value: "aspect ratio 9:16, vertical format" },
+  { label: "4K Quality",      value: "4K ultra HD quality" },
+  { label: "Hyperrealistic",  value: "hyperrealistic, photorealistic" },
+  { label: "Cinematic",       value: "cinematic lighting, dramatic shadows" },
+  { label: "Midjourney",      value: "--v 6 --ar 16:9 --style raw" },
+  { label: "Dark Mode UI",    value: "dark mode UI/UX design" },
+  { label: "Step by Step",    value: "explain step by step with examples" },
+  { label: "JSON Output",     value: "output as valid JSON" },
+  { label: "Bullet Points",   value: "format response as concise bullet points" },
+  { label: "Professional",    value: "formal professional tone" },
+  { label: "Creative",        value: "creative and imaginative style" },
+];
 
 export default function HomePage() {
   const [messages, setMessages]         = useState<Message[]>([]);
   const [history, setHistory]           = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading]       = useState(false);
   const [templateIdea, setTemplateIdea] = useState("");
+  const [appendText, setAppendText]     = useState("");
   const [selectedId, setSelectedId]     = useState<string | undefined>();
   const [viewMode, setViewMode]         = useState<ViewMode>("chat");
   const [latestPrompt, setLatestPrompt] = useState<{ engineeredPrompt: string; originalIdea: string } | null>(null);
@@ -47,18 +64,20 @@ export default function HomePage() {
       const { engineeredPrompt, explanation } = await res.json();
 
       setMessages(prev => prev.map(m =>
-        m.id === aid ? { ...m, engineeredPrompt, explanation, content: explanation || "", isLoading: false, timestamp: Date.now() } : m
+        m.id === aid ? { ...m, engineeredPrompt, explanation, content: "", isLoading: false, timestamp: Date.now() } : m
       ));
       setLatestPrompt({ engineeredPrompt, originalIdea: idea });
 
       const entry: HistoryEntry = {
-        id: uuidv4(), title: idea.slice(0, 55) + (idea.length > 55 ? "…" : ""),
-        engineeredPrompt, originalIdea: idea, timestamp: Date.now(),
+        id: uuidv4(),
+        title: idea.slice(0, 55) + (idea.length > 55 ? "…" : ""),
+        engineeredPrompt, originalIdea: idea,
+        timestamp: Date.now(),
+        category: detectCategory(idea),
       };
       saveToHistory(entry); setHistory(loadHistory());
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Something went wrong";
-      toast.error(msg);
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
       setMessages(prev => prev.filter(m => m.id !== aid));
     } finally { setIsLoading(false); }
   }, []);
@@ -82,40 +101,32 @@ export default function HomePage() {
     setMessages([]); setSelectedId(undefined); setLatestPrompt(null); setViewMode("chat");
   };
 
-  const handleDeleteHistory = (id: string) => {
-    setHistory(p => p.filter(e => e.id !== id));
-    if (selectedId === id) handleNewChat();
-  };
-
   const isEmpty = messages.length === 0;
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--bg)" }}>
-      {/* Sidebar */}
       <Sidebar
         history={history} selectedId={selectedId}
         onSelectHistory={handleSelectHistory}
         onNewChat={handleNewChat}
-        onDeleteHistory={handleDeleteHistory}
+        onDeleteHistory={id => { setHistory(p => p.filter(e => e.id !== id)); if (selectedId === id) handleNewChat(); }}
       />
 
-      {/* Main area */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
         <Header />
 
-        {/* View mode toggle */}
+        {/* View toggle */}
         {latestPrompt && (
           <div style={{
             display: "flex", alignItems: "center", gap: 8,
             padding: "7px 20px", borderBottom: "1px solid var(--border)",
-            background: "var(--bg-panel)", flexShrink: 0,
+            background: "rgba(17,17,22,0.7)", backdropFilter: "blur(12px)", flexShrink: 0,
           }}>
             <div className="view-tabs">
-              {(["chat", "split"] as ViewMode[]).map(mode => (
-                <button key={mode} onClick={() => setViewMode(mode)}
-                  className={`view-tab${viewMode === mode ? " active" : ""}`}>
-                  {mode === "chat" ? <MessageSquare size={11} /> : <Layers size={11} />}
-                  {mode === "chat" ? "Chat" : "Split View"}
+              {(["chat", "split"] as ViewMode[]).map(m => (
+                <button key={m} onClick={() => setViewMode(m)} className={`view-tab${viewMode === m ? " active" : ""}`}>
+                  {m === "chat" ? <MessageSquare size={11}/> : <Layers size={11}/>}
+                  {m === "chat" ? "Chat" : "Split View"}
                 </button>
               ))}
             </div>
@@ -125,42 +136,38 @@ export default function HomePage() {
         {/* Content */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-          {/* Split view */}
           {viewMode === "split" && latestPrompt ? (
-            <div className="scroll flex-1" style={{ padding: 20 }}>
+            <div className="flex-1 scroll" style={{ padding: 20 }}>
               <SplitPreview engineeredPrompt={latestPrompt.engineeredPrompt} originalIdea={latestPrompt.originalIdea} />
             </div>
           ) : (
-            /* Chat view */
             <div className="flex-1 scroll">
               {isEmpty ? (
-                /* Empty / welcome state */
+                /* Welcome state */
                 <div style={{
                   display: "flex", flexDirection: "column", alignItems: "center",
                   justifyContent: "center", height: "100%",
-                  padding: "40px 24px", gap: 28,
+                  padding: "40px 24px", gap: 24,
                 }}>
-                  {/* Icon */}
                   <div className="empty-icon">
                     <Zap size={22} color="var(--accent-fg)" />
                   </div>
 
-                  <div style={{ textAlign: "center", maxWidth: 480 }}>
+                  <div style={{ textAlign: "center", maxWidth: 500 }}>
                     <h1 style={{
-                      fontSize: 24, fontWeight: 700, color: "var(--tx-1)",
-                      letterSpacing: "-.025em", lineHeight: 1.3, marginBottom: 10,
+                      fontSize: 26, fontWeight: 700, color: "var(--tx-1)",
+                      letterSpacing: "-.025em", lineHeight: 1.25, marginBottom: 10,
                     }}>
                       Engineer your perfect prompt
                     </h1>
                     <p style={{ fontSize: 14.5, color: "var(--tx-2)", lineHeight: 1.7 }}>
-                      Describe any raw idea and I&apos;ll transform it into a structured,
-                      professional AI prompt using Role-play, Context &amp; Constraints techniques.
+                      Describe any raw idea and get a single, ready-to-paste AI prompt —
+                      crafted for ChatGPT, Claude, Midjourney, DALL·E, and more.
                     </p>
                   </div>
 
-                  {/* Feature tags */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center", maxWidth: 440 }}>
-                    {["🎭 Role-play personas","🌐 Rich context","📋 Structured tasks","🖼️ Vision support","🔀 Split preview","📋 Copy anywhere"].map(f => (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center", maxWidth: 480 }}>
+                    {["🎭 Persona-driven","🌐 Context-rich","📋 Task-specific","🖼️ Vision aware","⚡ Copy-ready","🔀 Split preview"].map(f => (
                       <span key={f} style={{
                         fontSize: 12, color: "var(--tx-3)",
                         background: "var(--bg-card)", border: "1px solid var(--border)",
@@ -169,11 +176,9 @@ export default function HomePage() {
                     ))}
                   </div>
 
-                  {/* Templates */}
                   <TemplateButtons onSelect={handleTemplateSelect} disabled={isLoading} />
                 </div>
               ) : (
-                /* Messages list */
                 <div style={{
                   maxWidth: 760, margin: "0 auto", width: "100%",
                   padding: "32px 20px", display: "flex", flexDirection: "column", gap: 28,
@@ -185,22 +190,45 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Input bar */}
+          {/* ── Input area ─────────────────────────── */}
           <div style={{
-            flexShrink: 0, background: "var(--bg)", padding: "12px 20px 16px",
+            flexShrink: 0, background: "rgba(11,11,14,0.9)",
+            backdropFilter: "blur(16px)",
             borderTop: "1px solid var(--border)",
+            padding: "10px 20px 16px",
           }}>
-            <div style={{ maxWidth: 760, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ maxWidth: 760, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
+
+              {/* Templates row */}
               {!isEmpty && (
                 <TemplateButtons onSelect={handleTemplateSelect} disabled={isLoading} />
               )}
+
+              {/* Quick Action bar */}
+              <div className="quick-bar">
+                {QUICK_ACTIONS.map(a => (
+                  <button
+                    key={a.label}
+                    onClick={() => { setAppendText(a.value); }}
+                    disabled={isLoading}
+                    className="quick-chip"
+                    title={`Append: "${a.value}"`}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+
               <ChatInput
-                onSend={handleSend} isLoading={isLoading}
-                initialValue={templateIdea} onClearInitial={() => setTemplateIdea("")}
+                onSend={handleSend}
+                isLoading={isLoading}
+                initialValue={templateIdea}
+                onClearInitial={() => setTemplateIdea("")}
+                appendText={appendText}
+                onClearAppend={() => setAppendText("")}
               />
             </div>
           </div>
-
         </div>
       </div>
     </div>

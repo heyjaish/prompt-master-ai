@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight, Clock, Zap } from "lucide-react";
-import { HistoryEntry, deleteFromHistory, formatTimestamp } from "@/lib/history";
+import { HistoryEntry, deleteFromHistory, formatTimestamp, CATEGORY_META } from "@/lib/history";
 
 interface Props {
   history: HistoryEntry[];
@@ -28,25 +28,23 @@ export default function Sidebar({ history, onSelectHistory, onNewChat, onDeleteH
       <button
         onClick={() => setCollapsed(c => !c)}
         style={{
-          position: "absolute", right: -1, top: 62, zIndex: 20,
-          width: 18, height: 36,
-          background: "var(--bg-panel)", border: "1px solid var(--border)",
-          borderLeft: "none", borderRadius: "0 5px 5px 0",
+          position: "absolute", right: -1, top: 58, zIndex: 20,
+          width: 18, height: 34, background: "var(--bg-panel)",
+          border: "1px solid var(--border)", borderLeft: "none",
+          borderRadius: "0 5px 5px 0",
           display: "flex", alignItems: "center", justifyContent: "center",
           color: "var(--tx-3)", cursor: "pointer", transition: "color .15s",
         }}
         onMouseEnter={e => (e.currentTarget.style.color = "var(--tx-2)")}
         onMouseLeave={e => (e.currentTarget.style.color = "var(--tx-3)")}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {collapsed ? <ChevronRight size={10} /> : <ChevronLeft size={10} />}
       </button>
 
-      {/* Logo/title */}
+      {/* Logo */}
       <div style={{
         display: "flex", alignItems: "center", gap: 9,
-        padding: "14px 14px 12px", borderBottom: "1px solid var(--border)",
-        flexShrink: 0,
+        padding: "14px 14px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0,
       }}>
         <div style={{
           width: 28, height: 28, borderRadius: 8, flexShrink: 0,
@@ -75,7 +73,7 @@ export default function Sidebar({ history, onSelectHistory, onNewChat, onDeleteH
         </button>
       </div>
 
-      {/* Divider label */}
+      {/* History label */}
       {!collapsed && history.length > 0 && (
         <div style={{
           padding: "6px 14px 3px", fontSize: 10.5, fontWeight: 700,
@@ -97,40 +95,50 @@ export default function Sidebar({ history, onSelectHistory, onNewChat, onDeleteH
           </div>
         )}
 
-        {history.map(entry => (
-          <button
-            key={entry.id}
-            onClick={() => onSelectHistory(entry)}
-            onMouseEnter={() => setHoverId(entry.id)}
-            onMouseLeave={() => setHoverId(null)}
-            className={`sidebar-item${selectedId === entry.id ? " active" : ""}`}
-            title={collapsed ? entry.title : undefined}
-          >
-            <MessageSquare size={13} style={{ flexShrink: 0, opacity: .55 }} />
-            {!collapsed && (
-              <>
-                <div className="flex-1" style={{ minWidth: 0 }}>
-                  <div className="truncate" style={{ fontSize: 12.5, fontWeight: 500, color: "var(--tx-1)" }}>
-                    {entry.title}
+        {history.map(entry => {
+          const cat = CATEGORY_META[entry.category ?? "general"];
+          return (
+            <button
+              key={entry.id}
+              onClick={() => onSelectHistory(entry)}
+              onMouseEnter={() => setHoverId(entry.id)}
+              onMouseLeave={() => setHoverId(null)}
+              className={`sidebar-item${selectedId === entry.id ? " active" : ""}`}
+              title={collapsed ? entry.title : undefined}
+            >
+              {/* Category emoji or dot */}
+              {collapsed ? (
+                <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{cat.emoji}</span>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <span style={{ fontSize: 13, lineHeight: 1 }}>{cat.emoji}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--tx-3)", display: "flex", alignItems: "center", gap: 3, marginTop: 1 }}>
-                    <Clock size={9} />{formatTimestamp(entry.timestamp)}
+                  <div className="flex-1" style={{ minWidth: 0 }}>
+                    <div className="truncate" style={{ fontSize: 12.5, fontWeight: 500, color: "var(--tx-1)" }}>
+                      {entry.title}
+                    </div>
+                    <div style={{
+                      fontSize: 11, color: "var(--tx-3)",
+                      display: "flex", alignItems: "center", gap: 4, marginTop: 2,
+                    }}>
+                      <Clock size={9} />
+                      {formatTimestamp(entry.timestamp)}
+                      <span style={{ color: cat.color, fontWeight: 600, marginLeft: 2 }}>
+                        {cat.label}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                {hoverId === entry.id && (
-                  <button
-                    onClick={e => del(e, entry.id)}
-                    className="icon-btn"
-                    style={{ width: 22, height: 22, color: "var(--tx-3)" }}
-                    title="Delete"
-                  >
-                    <Trash2 size={11} />
-                  </button>
-                )}
-              </>
-            )}
-          </button>
-        ))}
+                  {hoverId === entry.id && (
+                    <button onClick={e => del(e, entry.id)} className="icon-btn" style={{ width: 22, height: 22, flexShrink: 0 }}>
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </>
+              )}
+            </button>
+          );
+        })}
       </div>
     </aside>
   );

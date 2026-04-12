@@ -10,11 +10,13 @@ interface Props {
   isLoading: boolean;
   initialValue?: string;
   onClearInitial?: () => void;
+  appendText?: string;
+  onClearAppend?: () => void;
 }
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
-export default function ChatInput({ onSend, isLoading, initialValue = "", onClearInitial }: Props) {
+export default function ChatInput({ onSend, isLoading, initialValue = "", onClearInitial, appendText, onClearAppend }: Props) {
   const [value, setValue] = useState("");
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [drag, setDrag] = useState(false);
@@ -26,20 +28,26 @@ export default function ChatInput({ onSend, isLoading, initialValue = "", onClea
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialValue]);
 
+  useEffect(() => {
+    if (appendText) {
+      setValue(p => p ? `${p.trimEnd()}, ${appendText}` : appendText);
+      onClearAppend?.();
+      ref.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appendText]);
+
   const resize = () => {
     const el = ref.current; if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 200) + "px";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   };
 
   const processFile = (file: File): Promise<UploadedImage> =>
     new Promise((res, rej) => {
-      if (!ACCEPTED.includes(file.type)) { rej(new Error("Unsupported file type")); return; }
+      if (!ACCEPTED.includes(file.type)) { rej(new Error("Unsupported type")); return; }
       const r = new FileReader();
-      r.onload = e => {
-        const src = e.target!.result as string;
-        res({ preview: src, data: src.split(",")[1], mimeType: file.type, name: file.name });
-      };
+      r.onload = e => { const src = e.target!.result as string; res({ preview: src, data: src.split(",")[1], mimeType: file.type, name: file.name }); };
       r.onerror = rej;
       r.readAsDataURL(file);
     });
@@ -69,18 +77,13 @@ export default function ChatInput({ onSend, isLoading, initialValue = "", onClea
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* Image previews */}
       {images.length > 0 && (
         <div className="anim-in" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {images.map((img, i) => (
             <div key={i} className="img-thumb">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={img.preview} alt={img.name} />
-              <button
-                className="remove-overlay"
-                onClick={() => setImages(p => p.filter((_, j) => j !== i))}
-                style={{ border: "none", cursor: "pointer", width: "100%", height: "100%" }}
-              >
+              <button className="img-remove" onClick={() => setImages(p => p.filter((_, j) => j !== i))}>
                 <X size={14} color="white" />
               </button>
             </div>
@@ -88,7 +91,6 @@ export default function ChatInput({ onSend, isLoading, initialValue = "", onClea
         </div>
       )}
 
-      {/* Main input box */}
       <div
         className={`input-wrap${drag ? " drag-over" : ""}`}
         onDragOver={e => { e.preventDefault(); setDrag(true); }}
@@ -111,16 +113,12 @@ export default function ChatInput({ onSend, isLoading, initialValue = "", onClea
           </button>
           <input ref={fileRef} type="file" accept={ACCEPTED.join(",")} multiple style={{ display: "none" }}
             onChange={e => { if (e.target.files) { addFiles(e.target.files); e.target.value = ""; } }} />
-
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
             <span style={{ fontSize: 11.5, color: "var(--tx-3)" }}>
-              <kbd>Ctrl</kbd>+<kbd>↵</kbd> to send
+              <kbd>Ctrl</kbd>+<kbd>↵</kbd>
             </span>
-            <button className="send-btn" onClick={send} disabled={!canSend} title="Send">
-              {isLoading
-                ? <Loader2 size={15} className="spin" />
-                : <Send size={14} />
-              }
+            <button className="send-btn" onClick={send} disabled={!canSend}>
+              {isLoading ? <Loader2 size={15} className="spin" /> : <Send size={14} />}
             </button>
           </div>
         </div>

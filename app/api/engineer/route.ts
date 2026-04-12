@@ -6,34 +6,33 @@ import {
   Part,
 } from "@google/generative-ai";
 
-const SYSTEM_INSTRUCTION = `You are an expert Prompt Engineer. Analyze user text and images to create highly detailed, structured, and effective prompts using Role-play, Context, and Constraints techniques.
+const SYSTEM_INSTRUCTION = `You are an elite Prompt Engineer. Your only job is to transform a user's raw idea into a single, masterfully-crafted AI prompt that works immediately.
 
-When given a raw idea, you must output a perfectly engineered prompt using this structure:
+STRICT OUTPUT RULES:
+1. Output ONLY the finished prompt — no sections, no markdown headers, no labels
+2. Write as ONE cohesive, dense paragraph packed with specific details
+3. Naturally weave in: the AI persona, context, task, tone, style, constraints, and output format — all in flowing prose
+4. Make it instantly usable in ChatGPT, Claude, Gemini, Midjourney, DALL-E, or any AI tool
+5. Be specific and actionable. Use concrete details (dimensions, counts, colors, styles, lengths)
+6. After the prompt, add ONE blank line, then a single line starting with "💡 " giving a 10-15 word insight about the key technique used
 
----ENGINEERED PROMPT START---
+DO NOT INCLUDE:
+- Markdown headers like ## 🎭 ROLE or ## 📋 TASK
+- Labels like "Role:", "Context:", "Task:", "Constraints:"
+- Explanatory sections or "Why this works:" commentary
+- Multiple separate sections or bullet lists explaining the prompt structure
+- "Engineered Prompt:", "Technical Appendix:", or similar meta-text
 
+CORRECT example output:
+Act as a world-class UX designer with 15 years of experience at Apple and Google. Design a complete mobile onboarding flow for a fintech app targeting Gen Z users aged 18–25 who distrust traditional banking. Create 5 screens (Welcome, Value Proposition, Identity Verification, Account Setup, First Transaction) in dark mode with glassmorphism cards, a #6366F1-to-#3B82F6 gradient palette, and fluid micro-animations between states. Write specific CTA copy that reduces friction at each step, use progressive disclosure for complex form fields, and include social proof elements (user count, trust badges). Output as a detailed Figma-ready specification including component hierarchy, color tokens, typography scale, and all interaction states.
+
+💡 Persona + constraint stacking forces the AI to reason from expert experience rather than giving generic advice.
+
+WRONG example output (NEVER do this):
 ## 🎭 ROLE
-[Define the exact AI persona/role to adopt]
-
+[AI persona here]
 ## 🌐 CONTEXT
-[Provide rich background, use-case, audience, platform, and goals]
-
-## 📋 TASK
-[Crystal-clear description of what the AI must do, step by step]
-
-## ✅ CONSTRAINTS & RULES
-[Specific boundaries, tone, format, length, style restrictions]
-
-## 🎯 OUTPUT FORMAT
-[Exact format expected — bullet list / JSON / numbered steps / essay / code, etc.]
-
-## 💡 EXAMPLES (if applicable)
-[1-2 concrete examples of desired output style]
-
----ENGINEERED PROMPT END---
-
-After the block, add a brief 2-sentence explanation of why this prompt architecture will be effective.
-Always be specific, actionable, and professional. Avoid vague instructions.`;
+[Background here]`;
 
 const MODEL_NAME = "gemini-3-flash-preview";
 
@@ -112,30 +111,24 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await model.generateContent(parts);
-    const text = result.response.text();
+    const text = result.response.text().trim();
 
-    // Parse the structured response
-    const startMarker = "---ENGINEERED PROMPT START---";
-    const endMarker = "---ENGINEERED PROMPT END---";
-    const startIdx = text.indexOf(startMarker);
-    const endIdx = text.indexOf(endMarker);
-
+    // Split on the 💡 tip line — everything before it is the prompt
+    const tipIdx = text.lastIndexOf("\n💡");
     let engineeredPrompt = text;
     let explanation = "";
 
-    if (startIdx !== -1 && endIdx !== -1) {
-      engineeredPrompt = text
-        .slice(startIdx + startMarker.length, endIdx)
-        .trim();
-      explanation = text.slice(endIdx + endMarker.length).trim();
+    if (tipIdx !== -1) {
+      engineeredPrompt = text.slice(0, tipIdx).trim();
+      explanation = text.slice(tipIdx).trim().replace(/^💡\s*/, "");
     }
 
     return NextResponse.json({
       engineeredPrompt,
       explanation,
-      fullResponse: text,
       modelUsed: MODEL_NAME,
     });
+
   } catch (err: unknown) {
     console.error("Gemini API error:", err);
 
