@@ -23,6 +23,9 @@ const HARDCODED_ADMINS = [
 const ENV_ADMINS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
 const ADMIN_EMAILS = [...new Set([...HARDCODED_ADMINS.map(e => e.toLowerCase()), ...ENV_ADMINS])];
 
+// ── Hardcoded admin password ────────────────────────────────
+const ADMIN_PASSWORD = "PromptMaster@2025"; // ← change this to your password
+
 type Tab = "overview" | "users" | "features" | "limits" | "settings";
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -102,6 +105,10 @@ export default function AdminPage() {
   const [saved, setSaved] = useState(false);
   const [actionUid, setActionUid] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const [passwordOk, setPasswordOk] = useState(false);
+  const [pwInput, setPwInput]       = useState("");
+  const [pwError, setPwError]       = useState("");
+  const [showPw, setShowPw]         = useState(false);
 
   const isAdmin = useMemo(() =>
     user ? ADMIN_EMAILS.includes(user.email?.toLowerCase() ?? "") : false,
@@ -159,6 +166,95 @@ export default function AdminPage() {
       <Link href="/" style={{ padding: "8px 20px", borderRadius: "var(--r2)", background: "var(--accent)", color: "#fff", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
         Go Back to App
       </Link>
+    </div>
+  );
+
+  // ── Password gate (shown after email check, before dashboard) ──
+  if (!passwordOk) return (
+    <div style={{
+      height: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: "var(--bg)",
+      backgroundImage: "radial-gradient(ellipse at 30% 60%, rgba(239,68,68,.08) 0%, transparent 55%), radial-gradient(ellipse at 80% 20%, rgba(99,102,241,.08) 0%, transparent 50%)",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 360,
+        background: "rgba(23,23,29,0.92)", backdropFilter: "blur(24px)",
+        border: "1px solid var(--border-lg)", borderRadius: "var(--r5)",
+        padding: "32px 28px",
+        boxShadow: "0 24px 64px rgba(0,0,0,.6)",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Shield size={16} color="#f87171" />
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--tx-1)", lineHeight: 1.2 }}>Admin Access</div>
+            <div style={{ fontSize: 11.5, color: "var(--tx-3)", lineHeight: 1.3 }}>Enter your admin password</div>
+          </div>
+        </div>
+
+        {/* Email badge */}
+        <div style={{ fontSize: 12, color: "var(--tx-3)", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--r1)", padding: "6px 10px", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+          {user.email}
+        </div>
+
+        {/* Password form */}
+        <form onSubmit={e => {
+          e.preventDefault();
+          if (pwInput === ADMIN_PASSWORD) {
+            setPwError(""); setPasswordOk(true);
+          } else {
+            setPwError("Incorrect password. Please try again.");
+            setPwInput("");
+          }
+        }} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ position: "relative" }}>
+            <input
+              autoFocus
+              type={showPw ? "text" : "password"}
+              value={pwInput}
+              onChange={e => { setPwInput(e.target.value); setPwError(""); }}
+              placeholder="Admin password"
+              style={{
+                width: "100%", background: "var(--bg-card)",
+                border: `1px solid ${pwError ? "rgba(239,68,68,.5)" : "var(--border-md)"}`,
+                borderRadius: "var(--r2)", color: "var(--tx-1)", fontSize: 14,
+                padding: "10px 40px 10px 14px", outline: "none", transition: "border .15s",
+                letterSpacing: showPw ? "normal" : "0.15em",
+              }}
+              onFocus={e => { if (!pwError) e.target.style.borderColor = "rgba(239,68,68,.5)"; }}
+              onBlur={e => { if (!pwError) e.target.style.borderColor = "var(--border-md)"; }}
+            />
+            <button type="button" onClick={() => setShowPw(s => !s)} style={{
+              position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", cursor: "pointer", color: "var(--tx-3)", fontSize: 12,
+            }}>
+              {showPw ? "Hide" : "Show"}
+            </button>
+          </div>
+
+          {pwError && (
+            <div style={{ fontSize: 12.5, color: "#f87171", display: "flex", alignItems: "center", gap: 6 }}>
+              <AlertTriangle size={12} /> {pwError}
+            </div>
+          )}
+
+          <button type="submit" style={{
+            padding: "10px", borderRadius: "var(--r2)",
+            background: "linear-gradient(135deg, #ef4444, #dc2626)",
+            color: "#fff", border: "none", fontSize: 14, fontWeight: 700,
+            cursor: "pointer", transition: "opacity .15s",
+          }}>
+            Unlock Admin Panel
+          </button>
+        </form>
+
+        <div style={{ textAlign: "center", marginTop: 18 }}>
+          <Link href="/" style={{ fontSize: 12.5, color: "var(--tx-3)", textDecoration: "none" }}>← Back to App</Link>
+        </div>
+      </div>
     </div>
   );
 
