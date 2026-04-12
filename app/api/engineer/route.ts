@@ -145,13 +145,14 @@ export async function POST(req: NextRequest) {
       error: "No GEMINI_API_KEY configured. Add one in Vercel Environment Variables → https://aistudio.google.com/app/apikey"
     }, { status: 500 });
 
-  // Hoist so catch block can access uid for error logging
+  // Hoist so catch block can access uid and modelName for error logging
   let body: {
     idea?: string; images?: { data: string; mimeType: string }[];
     templateType?: string; uid?: string;
     specialistName?: string; specialistPrompt?: string;
     contextHistory?: ContextItem[];
   } = {};
+  let modelName = DEFAULT_MODEL; // hoisted for error logging in catch
 
   try {
     body = await req.json();
@@ -183,7 +184,7 @@ export async function POST(req: NextRequest) {
 
     // ── AI Config ───────────────────────────────────────────────
     const aiCfg       = await getAIConfig();
-    const modelName   = (aiCfg?.model       as string)  ?? DEFAULT_MODEL;
+    modelName   = (aiCfg?.model       as string)  ?? DEFAULT_MODEL;
     const temperature = (aiCfg?.temperature as number)  ?? 0.7;
     const maxTokens   = (aiCfg?.maxTokens   as number)  ?? 8192;
     const adminPrefix = (aiCfg?.systemPromptPrefix as string) ?? "";
