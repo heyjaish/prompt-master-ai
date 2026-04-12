@@ -16,7 +16,7 @@ import {
 
 // ── Hardcoded admin emails (add yours here) ───────────────────
 const HARDCODED_ADMINS = [
-  "heyjaish@gmail.com",       // ← your primary admin account
+  "jaishkumar55@gmail.com",   // ← hardcoded admin account
   // add more emails here if needed
 ];
 // Also picks up NEXT_PUBLIC_ADMIN_EMAILS env var as fallback
