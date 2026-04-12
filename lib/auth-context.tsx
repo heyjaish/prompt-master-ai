@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "./firebase";
+import { registerUser } from "./admin";
 
 interface AuthCtx {
   user: User | null;
@@ -18,18 +19,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Guard: if Firebase auth isn't initialized (missing env vars), skip gracefully
     if (!auth) {
-      console.warn("Firebase auth not initialized — check environment variables.");
+      console.warn("Firebase auth not initialized — check env vars.");
       setLoading(false);
       return;
     }
 
     const unsub = onAuthStateChanged(
       auth,
-      (u) => { setUser(u); setLoading(false); },
-      (err) => { console.error("Auth state error:", err); setLoading(false); }
+      async (u) => {
+        setUser(u);
+        setLoading(false);
+
+        // ── Write/update user profile in Firestore on every login ──
+        if (u) {
+          try {
+            await registerUser({
+              uid:      u.uid,
+              email:    u.email    ?? "",
+              name:     u.displayName ?? u.email?.split("@")[0] ?? "User",
+              photoURL: u.photoURL ?? "",
+              provider: u.providerData?.[0]?.providerId ?? "google",
+            });
+          } catch (err) {
+            console.warn("registerUser failed:", err);
+          }
+        }
+      },
+      (err) => {
+        console.error("Auth state error:", err);
+        setLoading(false);
+      }
     );
+
     return unsub;
   }, []);
 
