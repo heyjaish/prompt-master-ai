@@ -369,7 +369,7 @@ export default function AdminPage() {
                             {Object.entries(days).map(([d,v])=>(
                               <div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                                 <div style={{fontSize:11,color:S.tx3,fontWeight:600}}>{v||""}</div>
-                                <div style={{width:"100%",background:"rgba(99,102,241,.15)",borderRadius:"4px 4px 0 0",height:`${Math.max((v/maxVal)*80,v>0?8:2)}px`,transition:"height .4s",background:v>0?"linear-gradient(to top,#6366f1,#818cf8)":"rgba(255,255,255,.06)"}}/>
+                                <div style={{width:"100%",borderRadius:"4px 4px 0 0",height:`${Math.max((v/maxVal)*80,v>0?8:2)}px`,transition:"height .4s",background:v>0?"linear-gradient(to top,#6366f1,#818cf8)":"rgba(255,255,255,.06)"}}/>
                                 <div style={{fontSize:10,color:S.tx3}}>{d.slice(5)}</div>
                               </div>
                             ))}
