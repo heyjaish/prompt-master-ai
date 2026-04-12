@@ -55,12 +55,55 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 4000): 
   }
 }
 
+// ── Multi-key rotation ─────────────────────────────────────────
+// Reads GEMINI_API_KEY, GEMINI_API_KEY_2 … GEMINI_API_KEY_10 from env
+// Tries each in order — automatically switches on 429 quota errors
+function getAllApiKeys(): string[] {
+  const keys: string[] = [];
+  const primary = process.env.GEMINI_API_KEY;
+  if (primary) keys.push(primary);
+  for (let i = 2; i <= 10; i++) {
+    const k = process.env[`GEMINI_API_KEY_${i}`];
+    if (k) keys.push(k);
+  }
+  return keys.filter(Boolean);
+}
+
+async function generateWithKeyRotation(
+  keys: string[], modelName: string, systemInstruction: string,
+  temperature: number, maxTokens: number, parts: Part[],
+  keyIndex = 0
+): Promise<{ text: string; keyUsed: number }> {
+  if (keyIndex >= keys.length) throw new Error("ALL_KEYS_EXHAUSTED");
+  const genAI = new GoogleGenerativeAI(keys[keyIndex]);
+  const model = genAI.getGenerativeModel({
+    model: modelName, systemInstruction,
+    generationConfig: { temperature, maxOutputTokens: maxTokens },
+    safetySettings: [
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT,  threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    ],
+  });
+  try {
+    const result = await withRetry(() => model.generateContent(parts), 1, 3000);
+    return { text: result.response.text().trim(), keyUsed: keyIndex + 1 };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const isQuota = msg.includes("429") || msg.includes("quota") || msg.toLowerCase().includes("too many");
+    if (isQuota && keyIndex + 1 < keys.length) {
+      console.warn(`API key ${keyIndex + 1} quota exceeded — switching to key ${keyIndex + 2}`);
+      return generateWithKeyRotation(keys, modelName, systemInstruction, temperature, maxTokens, parts, keyIndex + 1);
+    }
+    throw e;
+  }
+}
+
 interface ContextItem { originalIdea: string; engineeredPrompt: string; specialistName?: string; }
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: "GEMINI_API_KEY not configured. Get a free key at https://aistudio.google.com/app/apikey" }, { status: 500 });
+    const keys = getAllApiKeys();
+    if (keys.length === 0) return NextResponse.json({ error: "No GEMINI_API_KEY configured. Add one at https://aistudio.google.com/app/apikey then set it in Vercel environment variables." }, { status: 500 });
 
     const body = await req.json();
     const {
@@ -121,19 +164,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Build content parts ────────────────────────────────────
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction,
-      generationConfig: { temperature, maxOutputTokens: maxTokens },
-      safetySettings: [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT,  threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      ],
-    });
-
     const parts: Part[] = [];
-    let textContent = contextPrefix + (templateType ? `Template Type: ${templateType}\n\n` : "") + `Raw Idea: ${idea}`;
+    const textContent = contextPrefix + (templateType ? `Template Type: ${templateType}\n\n` : "") + `Raw Idea: ${idea}`;
     parts.push({ text: textContent });
 
     if (images && images.length > 0) {
@@ -143,8 +175,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await withRetry(() => model.generateContent(parts));
-    const text   = result.response.text().trim();
+    // ── Generate with automatic key rotation on quota errors ───
+    const { text, keyUsed } = await generateWithKeyRotation(
+      keys, modelName, systemInstruction, temperature, maxTokens, parts
+    );
 
     const tipIdx = text.lastIndexOf("\n💡");
     let engineeredPrompt = text, explanation = "";
@@ -153,15 +187,17 @@ export async function POST(req: NextRequest) {
       explanation      = text.slice(tipIdx).trim().replace(/^💡\s*/, "");
     }
 
-    return NextResponse.json({ engineeredPrompt, explanation, modelUsed: modelName });
+    return NextResponse.json({ engineeredPrompt, explanation, modelUsed: modelName, keyUsed });
 
   } catch (err: unknown) {
     console.error("Gemini API error:", err);
     let message = "An unexpected error occurred. Please try again.";
     if (err instanceof Error) {
       const raw = err.message;
-      if (raw.includes("429") || raw.includes("quota") || raw.toLowerCase().includes("too many"))
-        message = "⚠️ Rate limit hit (15 req/min on free tier). Auto-retried 2x — please wait ~1 minute and try again. Or get a fresh key: https://aistudio.google.com/app/apikey";
+      if (raw === "ALL_KEYS_EXHAUSTED")
+        message = `⚠️ All ${keys.length} API key(s) hit their quota (15 req/min limit). Add more keys as GEMINI_API_KEY_2, GEMINI_API_KEY_3… in Vercel env vars. Or wait ~1 minute.`;
+      else if (raw.includes("429") || raw.includes("quota") || raw.toLowerCase().includes("too many"))
+        message = "⚠️ Rate limit hit. Auto-retried all keys — please wait ~1 minute and try again.";
       else if (raw.includes("403") || raw.includes("API_KEY_INVALID") || raw.includes("401"))
         message = "🔑 Invalid API key. Check your GEMINI_API_KEY environment variable.";
       else if (raw.includes("404") || raw.includes("not found"))
