@@ -22,11 +22,11 @@ DO NOT INCLUDE:
 - Explanatory sections or "Why this works:" commentary
 - Multiple separate sections or bullet lists explaining the prompt structure`;
 
-const DEFAULT_MODEL   = "gemini-1.5-flash";   // most stable free tier
+const DEFAULT_MODEL   = "gemini-3-flash-preview";   // most stable free tier
 const FALLBACK_MODELS = [                       // tried in order when quota hit
-  "gemini-1.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash-8b",                        // lightest, highest quota
+  "gemini-3-flash-preview",
+  "gemini-3-flash-preview",
+  "gemini-3-flash-preview",                        // lightest, highest quota
 ];
 const ADMIN_KEY = process.env.ADMIN_SECRET_KEY ?? "admin-secret-2025";
 
