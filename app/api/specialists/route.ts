@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, increment, updateDoc } from "firebase/firestore";
+
+async function getDb() {
+  const { initializeApp, getApps, cert } = await import("firebase-admin/app");
+  const { getFirestore } = await import("firebase-admin/firestore");
+  const projectId   = process.env.FIREBASE_ADMIN_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const privateKey  = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  if (!projectId || !clientEmail || !privateKey)
+    throw new Error("FIREBASE_ADMIN_NOT_CONFIGURED");
+  const app = getApps().length ? getApps()[0] : initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+  return getFirestore(app);
+}
 
 // GET /api/specialists?uid=xxx — load user's 5 specialist slots
 export async function GET(req: NextRequest) {
   const uid = new URL(req.url).searchParams.get("uid");
-  if (!uid) return NextResponse.json({ error: "uid required" }, { status: 400 });
+  if (!uid) return NextResponse.json({ specialists: [] });
   try {
-    if (!db) return NextResponse.json({ specialists: [] });
-    const snap = await getDocs(collection(db, "users", uid, "specialists"));
+    const db   = await getDb();
+    const snap = await db.collection("users").doc(uid).collection("specialists").get();
     const specialists = snap.docs.map(d => ({ slotId: d.id, ...d.data() }));
     return NextResponse.json({ specialists });
   } catch (e) {
+    console.error("specialists GET error:", e);
     return NextResponse.json({ specialists: [] });
   }
 }
@@ -22,24 +33,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { uid, slotId, name, emoji, description } = body;
     if (!uid || !slotId) return NextResponse.json({ error: "uid and slotId required" }, { status: 400 });
-    if (!db) return NextResponse.json({ error: "DB not initialized" }, { status: 500 });
 
-    // Auto-generate a concise system prompt from user's description
+    const db  = await getDb();
     const systemPrompt = description
       ? `You are a specialist assistant focused on: ${description}. When engineering prompts in this domain, include highly specific technical details, proper terminology, and domain-specific requirements that make prompts immediately actionable for ${name || "this field"}.`
       : "";
 
-    const ref = doc(db, "users", uid, "specialists", String(slotId));
-    await setDoc(ref, {
-      slotId: String(slotId),
-      name:   name || "",
-      emoji:  emoji || "⭐",
-      description: description || "",
+    await db.collection("users").doc(uid).collection("specialists").doc(String(slotId)).set({
+      slotId:       String(slotId),
+      name:         name         || "",
+      emoji:        emoji        || "⭐",
+      description:  description  || "",
       systemPrompt,
       updatedAt: Date.now(),
     });
     return NextResponse.json({ ok: true });
   } catch (e) {
+    console.error("specialists POST error:", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

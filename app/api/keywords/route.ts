@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, getDocs, collection, query, orderBy, limit } from "firebase/firestore";
+
+async function getDb() {
+  const { initializeApp, getApps, cert } = await import("firebase-admin/app");
+  const { getFirestore } = await import("firebase-admin/firestore");
+  const projectId   = process.env.FIREBASE_ADMIN_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const privateKey  = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  if (!projectId || !clientEmail || !privateKey)
+    throw new Error("FIREBASE_ADMIN_NOT_CONFIGURED");
+  const app = getApps().length ? getApps()[0] : initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+  return getFirestore(app);
+}
 
 // GET /api/keywords?uid=xxx — returns top 20 keywords for user
 export async function GET(req: NextRequest) {
   const uid = new URL(req.url).searchParams.get("uid");
   if (!uid) return NextResponse.json({ keywords: [] });
   try {
-    if (!db) return NextResponse.json({ keywords: [] });
-    const snap = await getDocs(
-      query(collection(db, "users", uid, "keywords"), orderBy("count", "desc"), limit(20))
-    );
+    const db   = await getDb();
+    const snap = await db
+      .collection("users").doc(uid).collection("keywords")
+      .orderBy("count", "desc").limit(20).get();
     const keywords = snap.docs.map(d => ({ word: d.id, count: (d.data().count as number) || 1 }));
     return NextResponse.json({ keywords });
   } catch {
@@ -23,19 +33,24 @@ export async function POST(req: NextRequest) {
   try {
     const { uid, keywords } = await req.json() as { uid: string; keywords: string[] };
     if (!uid || !keywords?.length) return NextResponse.json({ ok: true });
-    if (!db) return NextResponse.json({ ok: true });
+
+    const db = await getDb();
+    const batch = db.batch();
 
     await Promise.all(
       keywords.slice(0, 6).map(async (word) => {
-        const ref = doc(db!, "users", uid, "keywords", word.toLowerCase().trim());
-        const snap = await import("firebase/firestore").then(m => m.getDoc(ref));
-        if (snap.exists()) {
-          await import("firebase/firestore").then(m => m.updateDoc(ref, { count: m.increment(1), lastSeen: Date.now() }));
+        const clean = word.toLowerCase().trim();
+        if (!clean || clean.length < 3) return;
+        const ref  = db.collection("users").doc(uid).collection("keywords").doc(clean);
+        const snap = await ref.get();
+        if (snap.exists) {
+          batch.update(ref, { count: (snap.data()!.count || 0) + 1, lastSeen: Date.now() });
         } else {
-          await setDoc(ref, { word: word.toLowerCase().trim(), count: 1, firstSeen: Date.now(), lastSeen: Date.now() });
+          batch.set(ref, { word: clean, count: 1, firstSeen: Date.now(), lastSeen: Date.now() });
         }
       })
     );
+    await batch.commit();
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: true }); // never fail UI
