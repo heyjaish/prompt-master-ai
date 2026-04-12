@@ -22,8 +22,13 @@ DO NOT INCLUDE:
 - Explanatory sections or "Why this works:" commentary
 - Multiple separate sections or bullet lists explaining the prompt structure`;
 
-const DEFAULT_MODEL = "gemini-2.0-flash";
-const ADMIN_KEY     = process.env.ADMIN_SECRET_KEY ?? "admin-secret-2025";
+const DEFAULT_MODEL   = "gemini-1.5-flash";   // most stable free tier
+const FALLBACK_MODELS = [                       // tried in order when quota hit
+  "gemini-1.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash-8b",                        // lightest, highest quota
+];
+const ADMIN_KEY = process.env.ADMIN_SECRET_KEY ?? "admin-secret-2025";
 
 // ── Read all configured API keys ─────────────────────────────────
 // Supports: GEMINI_API_KEY, GEMINI_API_KEY_2 … GEMINI_API_KEY_10
@@ -110,6 +115,29 @@ async function generateWithKeyRotation(
 
 interface ContextItem { originalIdea: string; engineeredPrompt: string; }
 
+// Try all keys with one model, then fall back to next model if all quota-exhausted
+async function generateWithModelFallback(
+  keys: string[], modelsToTry: string[], systemInstruction: string,
+  temperature: number, maxTokens: number, parts: Part[]
+): Promise<{ text: string; keyUsed: number; modelUsed: string }> {
+  for (const modelName of modelsToTry) {
+    try {
+      const { text, keyUsed } = await generateWithKeyRotation(
+        keys, modelName, systemInstruction, temperature, maxTokens, parts
+      );
+      return { text, keyUsed, modelUsed: modelName };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.startsWith("ALL_KEYS_EXHAUSTED")) {
+        console.warn(`[ModelFallback] All keys exhausted for ${modelName}, trying next model...`);
+        continue; // try next model
+      }
+      throw e;
+    }
+  }
+  throw new Error(`ALL_MODELS_EXHAUSTED||All ${modelsToTry.length} models tried with ${keys.length} keys — all quota exhausted`);
+}
+
 export async function POST(req: NextRequest) {
   const keys = getAllApiKeys();
   if (keys.length === 0)
@@ -186,9 +214,15 @@ export async function POST(req: NextRequest) {
         parts.push({ inlineData: { data: img.data, mimeType: img.mimeType as "image/jpeg" | "image/png" | "image/webp" | "image/gif" } });
     }
 
-    // ── Generate with key rotation ──────────────────────────────
-    const { text, keyUsed } = await generateWithKeyRotation(
-      keys, modelName, systemInstruction, temperature, maxTokens, parts
+    // ── Models to try: admin-configured first, then fallbacks ──
+    const modelsToTry = [
+      modelName,
+      ...FALLBACK_MODELS.filter(m => m !== modelName),
+    ];
+
+    // ── Generate: auto key-rotation + model-fallback on quota ───
+    const { text, keyUsed, modelUsed } = await generateWithModelFallback(
+      keys, modelsToTry, systemInstruction, temperature, maxTokens, parts
     );
 
     const tipIdx = text.lastIndexOf("\n💡");
@@ -198,22 +232,16 @@ export async function POST(req: NextRequest) {
       explanation      = text.slice(tipIdx).trim().replace(/^💡\s*/, "");
     }
 
-    return NextResponse.json({ engineeredPrompt, explanation, modelUsed: modelName, keyUsed });
+    return NextResponse.json({ engineeredPrompt, explanation, modelUsed, keyUsed });
 
   } catch (err: unknown) {
     console.error("[Engineer] Error:", err);
     let message = "An unexpected error occurred. Please try again.";
     if (err instanceof Error) {
       const raw = err.message;
-      if (raw.startsWith("ALL_KEYS_EXHAUSTED")) {
-        const [meta, details] = raw.split("||");
-        const count = meta.split(":")[1] ?? String(keys.length);
-        message = `⚠️ All ${count} key(s) failed. See RAW below for exact errors per key.`;
-        return NextResponse.json({
-          error: message,
-          rawError: details ?? meta,
-          keyCount: count,
-        }, { status: 500 });
+      if (raw.startsWith("ALL_KEYS_EXHAUSTED") || raw.startsWith("ALL_MODELS_EXHAUSTED")) {
+        const [, details] = raw.split("||");
+        message = `⚠️ All API keys and models are quota-exhausted. This usually means Vercel's shared IPs hit Google's rate limit. Please wait 1-2 minutes and try again. Details: ${details?.slice(0, 200) ?? "see Vercel logs"}`;
       } else if (isQuotaError(err)) {
         message = "⚠️ Rate limit hit. Please wait ~1 minute and try again.";
       } else if (raw.includes("403") || raw.includes("API_KEY_INVALID") || raw.includes("401")) {
@@ -224,6 +252,9 @@ export async function POST(req: NextRequest) {
         message = raw.slice(0, 300);
       }
     }
-    return NextResponse.json({ error: message, rawError: err instanceof Error ? err.message.slice(0, 800) : String(err).slice(0, 800) }, { status: 500 });
+    return NextResponse.json({
+      error: message,
+      rawError: err instanceof Error ? err.message.slice(0, 800) : String(err).slice(0, 800)
+    }, { status: 500 });
   }
 }
