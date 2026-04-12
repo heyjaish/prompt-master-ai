@@ -105,7 +105,13 @@ export default function HomePage() {
         }),
       });
 
-      if (!res.ok) throw new Error((await res.json()).error || "Request failed");
+      if (!res.ok) {
+        const errData = await res.json();
+        const msg = errData.rawError
+          ? `${errData.error}\n\nRAW: ${errData.rawError}`
+          : errData.error || "Request failed";
+        throw new Error(msg);
+      }
       const { engineeredPrompt, explanation } = await res.json();
 
       setMessages(prev => prev.map(m =>

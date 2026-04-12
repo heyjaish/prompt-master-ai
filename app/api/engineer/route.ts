@@ -54,12 +54,14 @@ async function getAIConfig() {
   } catch { return null; }
 }
 
-// ── Quota error detection ─────────────────────────────────────────
+// ── Quota / rate-limit detection ────────────────────────────────
+// Only true 429 rate limits — NOT 403 key errors that mention "quota"
 function isQuotaError(e: unknown): boolean {
   const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
-  return msg.includes("429") || msg.includes("quota") ||
-         msg.includes("too many") || msg.includes("resource_exhausted") ||
-         msg.includes("rate limit") || msg.includes("ratelimit");
+  // Must have 429 OR "too many requests" — "quota" alone is NOT enough
+  // because 403 errors can also say "quota exceeded" for billing/key issues
+  return msg.includes("429") || msg.includes("too many requests") ||
+         (msg.includes("resource_exhausted") && !msg.includes("403"));
 }
 
 // ── Generate with automatic key rotation ─────────────────────────
@@ -215,6 +217,6 @@ export async function POST(req: NextRequest) {
         message = raw.slice(0, 300);
       }
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message, rawError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500) }, { status: 500 });
   }
 }
