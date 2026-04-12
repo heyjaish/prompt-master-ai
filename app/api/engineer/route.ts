@@ -101,10 +101,11 @@ async function generateWithKeyRotation(
 interface ContextItem { originalIdea: string; engineeredPrompt: string; specialistName?: string; }
 
 export async function POST(req: NextRequest) {
-  try {
-    const keys = getAllApiKeys();
-    if (keys.length === 0) return NextResponse.json({ error: "No GEMINI_API_KEY configured. Add one at https://aistudio.google.com/app/apikey then set it in Vercel environment variables." }, { status: 500 });
+  const keys = getAllApiKeys();
+  if (keys.length === 0)
+    return NextResponse.json({ error: "No GEMINI_API_KEY configured. Add one at https://aistudio.google.com/app/apikey then set it in Vercel environment variables." }, { status: 500 });
 
+  try {
     const body = await req.json();
     const {
       idea, images, templateType, uid,
