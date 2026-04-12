@@ -14,8 +14,14 @@ import {
   getAdminConfig, saveAdminConfig, getAllUsers, updateUserRecord,
 } from "@/lib/admin";
 
-// ── Admin email list (comma-separated in env var) ──────────────
-const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+// ── Hardcoded admin emails (add yours here) ───────────────────
+const HARDCODED_ADMINS = [
+  "heyjaish@gmail.com",       // ← your primary admin account
+  // add more emails here if needed
+];
+// Also picks up NEXT_PUBLIC_ADMIN_EMAILS env var as fallback
+const ENV_ADMINS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+const ADMIN_EMAILS = [...new Set([...HARDCODED_ADMINS.map(e => e.toLowerCase()), ...ENV_ADMINS])];
 
 type Tab = "overview" | "users" | "features" | "limits" | "settings";
 
@@ -244,7 +250,7 @@ export default function AdminPage() {
       </aside>
 
       {/* ── Main content ──────────────────────────────────────── */}
-      <main style={{ flex: 1, overflow-y: "auto", display: "flex", flexDirection: "column" }}>
+      <main style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
 
         {/* Header bar */}
         <div style={{
