@@ -145,21 +145,21 @@ export async function POST(req: NextRequest) {
       error: "No GEMINI_API_KEY configured. Add one in Vercel Environment Variables → https://aistudio.google.com/app/apikey"
     }, { status: 500 });
 
+  // Hoist so catch block can access uid for error logging
+  let body: {
+    idea?: string; images?: { data: string; mimeType: string }[];
+    templateType?: string; uid?: string;
+    specialistName?: string; specialistPrompt?: string;
+    contextHistory?: ContextItem[];
+  } = {};
+
   try {
-    const body = await req.json();
+    body = await req.json();
     const {
       idea, images, templateType, uid,
       specialistName, specialistPrompt,
       contextHistory,
-    } = body as {
-      idea: string;
-      images?: { data: string; mimeType: string }[];
-      templateType?: string;
-      uid?: string;
-      specialistName?: string;
-      specialistPrompt?: string;
-      contextHistory?: ContextItem[];
-    };
+    } = body;
 
     if (!idea?.trim() && (!images || images.length === 0))
       return NextResponse.json({ error: "Please provide a raw idea." }, { status: 400 });
