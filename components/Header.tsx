@@ -2,8 +2,14 @@
 import { useState, useRef, useEffect } from "react";
 import { Zap, LogOut, ChevronDown, User } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import SpecialistBar, { Specialist } from "@/components/SpecialistBar";
 
-export default function Header() {
+interface Props {
+  activeSpecialist: Specialist | null;
+  onActivate: (s: Specialist | null) => void;
+}
+
+export default function Header({ activeSpecialist, onActivate }: Props) {
   const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -21,9 +27,10 @@ export default function Header() {
     : user?.email?.slice(0, 2).toUpperCase() ?? "U";
 
   return (
-    <header className="header" style={{ justifyContent: "space-between" }}>
-      {/* Left: Logo + name */}
-      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+    <header className="header" style={{ justifyContent: "space-between", gap: 12 }}>
+
+      {/* Left: Logo */}
+      <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
         <div style={{
           width: 26, height: 26, borderRadius: 7,
           background: "var(--accent-dim)", border: "1px solid var(--accent-brd)",
@@ -41,9 +48,20 @@ export default function Header() {
         }}>AI</span>
       </div>
 
+      {/* Center: Specialist Bar */}
+      {user && (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <SpecialistBar
+            uid={user.uid}
+            activeSlot={activeSpecialist?.slotId ?? null}
+            onActivate={onActivate}
+          />
+        </div>
+      )}
+
       {/* Right: User menu */}
       {user && (
-        <div ref={menuRef} style={{ position: "relative" }}>
+        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             onClick={() => setOpen(o => !o)}
             style={{
@@ -56,7 +74,6 @@ export default function Header() {
             onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.borderColor = "var(--border-md)"; }}
             onMouseLeave={e => { if (!open) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; } }}
           >
-            {/* Avatar */}
             {user.photoURL ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={user.photoURL} alt="Avatar" style={{ width: 26, height: 26, borderRadius: "50%", border: "1px solid var(--border-md)" }} />
@@ -113,7 +130,6 @@ export default function Header() {
         </div>
       )}
 
-      {/* Fallback if no user (shouldn't normally show) */}
       {!user && (
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <User size={14} style={{ color: "var(--tx-3)" }} />

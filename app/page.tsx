@@ -11,7 +11,7 @@ import ChatInput, { UploadedImage } from "@/components/ChatInput";
 import MessageBubble, { Message }   from "@/components/MessageBubble";
 import TemplateButtons     from "@/components/TemplateButtons";
 import SplitPreview        from "@/components/SplitPreview";
-import SpecialistBar, { Specialist } from "@/components/SpecialistBar";
+import type { Specialist } from "@/components/SpecialistBar";
 import LearningChips       from "@/components/LearningChips";
 import { HistoryEntry, detectCategory } from "@/lib/history";
 import { savePrompt, loadPrompts, deletePrompt } from "@/lib/firestore-history";
@@ -200,7 +200,7 @@ export default function HomePage() {
       />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-        <Header />
+        <Header activeSpecialist={activeSpecialist} onActivate={handleSpecialistActivate} />
 
         {/* Announcement banner */}
         {announcement?.enabled && (
@@ -283,11 +283,6 @@ export default function HomePage() {
           {/* ── Input area ─────────────────── */}
           <div style={{ flexShrink: 0, background: "rgba(11,11,14,0.9)", backdropFilter: "blur(16px)", borderTop: "1px solid var(--border)", padding: "10px 20px 16px" }}>
             <div style={{ maxWidth: 760, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
-
-              {/* Specialist bar */}
-              {user && (
-                <SpecialistBar uid={user.uid} activeSlot={activeSpecialist?.slotId ?? null} onActivate={handleSpecialistActivate}/>
-              )}
 
               {/* Learning chips — user's personalized keywords */}
               {user && (
