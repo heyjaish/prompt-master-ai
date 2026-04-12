@@ -4,13 +4,16 @@ import { v4 as uuidv4 } from "uuid";
 import toast from "react-hot-toast";
 import { Layers, MessageSquare, Zap } from "lucide-react";
 
+import AuthGuard from "@/components/AuthGuard";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import ChatInput, { UploadedImage } from "@/components/ChatInput";
 import MessageBubble, { Message } from "@/components/MessageBubble";
 import TemplateButtons from "@/components/TemplateButtons";
 import SplitPreview from "@/components/SplitPreview";
-import { HistoryEntry, loadHistory, saveToHistory, detectCategory } from "@/lib/history";
+import { HistoryEntry, detectCategory } from "@/lib/history";
+import { savePrompt, loadPrompts, deletePrompt } from "@/lib/firestore-history";
+import { useAuth } from "@/lib/auth-context";
 
 type ViewMode = "chat" | "split";
 
@@ -31,6 +34,7 @@ const QUICK_ACTIONS = [
 ];
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [messages, setMessages]         = useState<Message[]>([]);
   const [history, setHistory]           = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading]       = useState(false);
@@ -41,7 +45,10 @@ export default function HomePage() {
   const [latestPrompt, setLatestPrompt] = useState<{ engineeredPrompt: string; originalIdea: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setHistory(loadHistory()); }, []);
+  // Load history from Firestore on mount
+  useEffect(() => {
+    if (user) loadPrompts(user.uid).then(setHistory).catch(() => {});
+  }, [user]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const handleSend = useCallback(async (idea: string, images: UploadedImage[]) => {
@@ -75,12 +82,15 @@ export default function HomePage() {
         timestamp: Date.now(),
         category: detectCategory(idea),
       };
-      saveToHistory(entry); setHistory(loadHistory());
+      if (user) {
+        await savePrompt(user.uid, entry);
+        setHistory(prev => [entry, ...prev.filter(e => e.id !== entry.id)]);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
       setMessages(prev => prev.filter(m => m.id !== aid));
     } finally { setIsLoading(false); }
-  }, []);
+  }, [user]);
 
   const handleTemplateSelect = useCallback((idea: string, _type: string) => {
     setTemplateIdea(idea);
@@ -104,12 +114,17 @@ export default function HomePage() {
   const isEmpty = messages.length === 0;
 
   return (
+    <AuthGuard>
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--bg)" }}>
       <Sidebar
         history={history} selectedId={selectedId}
         onSelectHistory={handleSelectHistory}
         onNewChat={handleNewChat}
-        onDeleteHistory={id => { setHistory(p => p.filter(e => e.id !== id)); if (selectedId === id) handleNewChat(); }}
+        onDeleteHistory={id => {
+          if (user) deletePrompt(user.uid, id).catch(() => {});
+          setHistory(p => p.filter(e => e.id !== id));
+          if (selectedId === id) handleNewChat();
+        }}
       />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
@@ -232,5 +247,6 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+    </AuthGuard>
   );
 }

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
+import { AuthProvider } from "@/lib/auth-context";
 
 export const metadata: Metadata = {
   title: "Prompt Master AI — Specialist Prompt Engineering Tool",
-  description: "Transform raw ideas into structured, professional AI prompts using Role-play, Context & Constraints techniques.",
+  description: "Transform raw ideas into structured, professional AI prompts.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,17 +20,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <Toaster
           position="bottom-right"
           toastOptions={{
             duration: 3000,
             style: {
-              background: "#1a1a1f",
-              color: "#f0f0f2",
+              background: "#1a1a1f", color: "#f0f0f2",
               border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "10px",
-              fontSize: "13px",
+              borderRadius: "10px", fontSize: "13px",
               fontFamily: "Inter, sans-serif",
               boxShadow: "0 8px 32px rgba(0,0,0,.5)",
             },
