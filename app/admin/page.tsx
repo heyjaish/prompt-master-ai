@@ -11,7 +11,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import {
   AdminConfig, UserRecord, DEFAULT_CONFIG,
-  getAdminConfig, saveAdminConfig, getAllUsers, updateUserRecord,
+  getAdminConfig, saveAdminConfig, getAllUsers, updateUserRecord, registerUser,
 } from "@/lib/admin";
 
 // ── Hardcoded admin emails (add yours here) ───────────────────
@@ -109,6 +109,7 @@ export default function AdminPage() {
   const [pwInput, setPwInput]       = useState("");
   const [pwError, setPwError]       = useState("");
   const [showPw, setShowPw]         = useState(false);
+  const [loadError, setLoadError]   = useState<string | null>(null);
 
   const isAdmin = useMemo(() =>
     user ? ADMIN_EMAILS.includes(user.email?.toLowerCase() ?? "") : false,
@@ -118,10 +119,29 @@ export default function AdminPage() {
 
   const loadData = useCallback(async () => {
     setDataLoading(true);
-    const [cfg, allUsers] = await Promise.all([getAdminConfig(), getAllUsers()]);
-    setConfig(cfg); setUsers(allUsers);
-    setDataLoading(false);
-  }, []);
+    setLoadError(null);
+    try {
+      // Auto-seed the admin's own user doc so at least 1 user shows up
+      if (user) {
+        await registerUser({
+          uid:      user.uid,
+          email:    user.email    ?? "",
+          name:     user.displayName ?? user.email?.split("@")[0] ?? "Admin",
+          photoURL: user.photoURL ?? "",
+          provider: user.providerData?.[0]?.providerId ?? "google",
+        });
+      }
+      const [cfg, allUsers] = await Promise.all([getAdminConfig(), getAllUsers()]);
+      setConfig(cfg);
+      setUsers(allUsers);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLoadError(msg);
+      console.error("Admin loadData error:", err);
+    } finally {
+      setDataLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!loading && !user) { router.replace("/login"); return; }
@@ -384,6 +404,51 @@ export default function AdminPage() {
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+
+          {/* ── Error banner ──────────────────────────────────── */}
+          {loadError && (
+            <div style={{
+              marginBottom: 20, padding: "14px 18px",
+              background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.3)",
+              borderRadius: "var(--r3)", display: "flex", flexDirection: "column", gap: 10,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={16} color="#f87171" />
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#f87171" }}>Data Load Failed</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: "#fca5a5", fontFamily: "monospace", background: "rgba(0,0,0,.2)", padding: "8px 12px", borderRadius: 6 }}>
+                {loadError}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--tx-2)", lineHeight: 1.7 }}>
+                <strong>Fix:</strong> Go to <strong>Firebase Console → Firestore → Rules</strong> and paste this:
+              </div>
+              <pre style={{ fontSize: 11, background: "rgba(0,0,0,.3)", padding: "10px 12px", borderRadius: 6, color: "#a5b4fc", overflowX: "auto", lineHeight: 1.6 }}>{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /config/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /users/{uid}/prompts/{promptId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}`}</pre>
+              <div style={{ display: "flex", gap: 8 }}>
+                <a href="https://console.firebase.google.com/project/ai-prmpt-master/firestore/rules" target="_blank"
+                  style={{ padding: "7px 16px", borderRadius: "var(--r2)", background: "rgba(239,68,68,.2)", border: "1px solid rgba(239,68,68,.4)", color: "#f87171", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                  Open Firebase Rules →
+                </a>
+                <button onClick={loadData}
+                  style={{ padding: "7px 16px", borderRadius: "var(--r2)", background: "var(--accent)", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* ══ OVERVIEW ═══════════════════════════════════════ */}
           {tab === "overview" && (
