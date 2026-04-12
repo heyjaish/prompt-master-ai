@@ -58,7 +58,7 @@ export default function SpecialistBar({ uid, activeSlot, onActivate }: Props) {
       await fetch("/api/specialists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid, slotId: String((editing ?? 0) + 1), ...draft }),
+        body: JSON.stringify({ uid, ...draft, slotId: String((editing ?? 0) + 1) }),
       });
       const newSlots = [...slots];
       const saved = { ...draft, slotId: String((editing ?? 0) + 1) };
