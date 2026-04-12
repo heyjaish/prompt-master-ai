@@ -6,51 +6,68 @@ async function getDb() {
   const projectId   = process.env.FIREBASE_ADMIN_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
   const privateKey  = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!projectId || !clientEmail || !privateKey)
-    throw new Error("FIREBASE_ADMIN_NOT_CONFIGURED");
-  const app = getApps().length ? getApps()[0] : initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+  if (!projectId || !clientEmail || !privateKey) throw new Error("FIREBASE_ADMIN_NOT_CONFIGURED");
+  const app = getApps().length ? getApps()[0]
+    : initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
   return getFirestore(app);
 }
 
-// GET /api/keywords?uid=xxx — returns top 20 keywords for user
+// Collection name — specialist-scoped or global
+function kwCollection(uid: string, specialistId?: string | null) {
+  return specialistId
+    ? `users/${uid}/specialist_keywords/${specialistId}/words`
+    : `users/${uid}/keywords`;
+}
+
+// GET /api/keywords?uid=xxx&specialistId=yyy — top 20 keywords
 export async function GET(req: NextRequest) {
-  const uid = new URL(req.url).searchParams.get("uid");
+  const { searchParams } = new URL(req.url);
+  const uid          = searchParams.get("uid");
+  const specialistId = searchParams.get("specialistId") || null;
   if (!uid) return NextResponse.json({ keywords: [] });
+
   try {
     const db   = await getDb();
-    const snap = await db
-      .collection("users").doc(uid).collection("keywords")
-      .orderBy("count", "desc").limit(20).get();
-    const keywords = snap.docs.map(d => ({ word: d.id, count: (d.data().count as number) || 1 }));
+    const col  = kwCollection(uid, specialistId);
+    const snap = await db.collection(col).orderBy("count", "desc").limit(20).get();
+    const keywords = snap.docs.map(d => ({
+      word:     d.id,
+      count:    (d.data().count as number) || 1,
+      lastSeen: (d.data().lastSeen as number) || 0,
+    }));
     return NextResponse.json({ keywords });
   } catch {
     return NextResponse.json({ keywords: [] });
   }
 }
 
-// POST /api/keywords — save/increment keywords for user
+// POST /api/keywords — save/increment keywords (specialist-scoped if provided)
 export async function POST(req: NextRequest) {
   try {
-    const { uid, keywords } = await req.json() as { uid: string; keywords: string[] };
+    const { uid, keywords, specialistId } = await req.json() as {
+      uid: string;
+      keywords: string[];
+      specialistId?: string;
+    };
     if (!uid || !keywords?.length) return NextResponse.json({ ok: true });
 
-    const db = await getDb();
-    const batch = db.batch();
+    const db  = await getDb();
+    const col = kwCollection(uid, specialistId ?? null);
 
     await Promise.all(
-      keywords.slice(0, 6).map(async (word) => {
+      keywords.slice(0, 8).map(async (word) => {
         const clean = word.toLowerCase().trim();
         if (!clean || clean.length < 3) return;
-        const ref  = db.collection("users").doc(uid).collection("keywords").doc(clean);
+        const ref  = db.collection(col).doc(clean);
         const snap = await ref.get();
+        const now  = Date.now();
         if (snap.exists) {
-          batch.update(ref, { count: (snap.data()!.count || 0) + 1, lastSeen: Date.now() });
+          await ref.update({ count: (snap.data()!.count || 0) + 1, lastSeen: now });
         } else {
-          batch.set(ref, { word: clean, count: 1, firstSeen: Date.now(), lastSeen: Date.now() });
+          await ref.set({ word: clean, count: 1, firstSeen: now, lastSeen: now });
         }
       })
     );
-    await batch.commit();
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: true }); // never fail UI
