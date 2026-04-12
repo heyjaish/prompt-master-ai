@@ -820,8 +820,6 @@ export default function AdminPage() {
               <div style={{fontSize:11.5,color:S.tx3,textAlign:"center"}}>🔒 Only anonymized stats sent to Gemini — no emails or user IDs shared.</div>
             </div>
           )}
-            </div>
-          )}
 
           {/* ── ERROR MONITOR ── */}
           {tab==="errors" && (
