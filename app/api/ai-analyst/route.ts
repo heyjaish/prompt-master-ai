@@ -16,9 +16,9 @@ function getAllApiKeys(): string[] {
 }
 
 const MODELS_TO_TRY = [
-  "gemini-2.5-flash-preview-04-17",
-  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash",
   "gemini-1.5-flash",
+  "gemini-2.0-flash-lite-preview-02-05", // Example of a newer model in 2026
 ];
 
 async function generateWithRetry(prompt: string): Promise<string> {
@@ -26,22 +26,28 @@ async function generateWithRetry(prompt: string): Promise<string> {
   if (keys.length === 0) throw new Error("No API keys configured");
   const errors: string[] = [];
 
-  for (const model of MODELS_TO_TRY) {
-    for (const key of keys) {
-      try {
-        const genAI = new GoogleGenerativeAI(key);
-        const m = genAI.getGenerativeModel({ model, generationConfig: { temperature: 0.4, maxOutputTokens: 1024 } });
-        const result = await m.generateContent(prompt);
-        return result.response.text().trim();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        const isQuota = msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED");
-        errors.push(`[${model}] ${msg.slice(0, 120)}`);
-        if (!isQuota) throw e; // non-quota errors: fail fast
+    for (const model of MODELS_TO_TRY) {
+      for (const key of keys) {
+        try {
+          const genAI = new GoogleGenerativeAI(key);
+          const m = genAI.getGenerativeModel({ model, generationConfig: { temperature: 0.4, maxOutputTokens: 1024 } });
+          const result = await m.generateContent(prompt);
+          return result.response.text().trim();
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          errors.push(`[${model}] ${msg.slice(0, 120)}`);
+          // If it's a quota error, we might want to try another key with the SAME model
+          // If it's a 404/invalid model error, we should move to the NEXT model
+          if (msg.includes("404") || msg.includes("not found")) {
+            console.warn(`[Analyst] Model ${model} not found, skipping to next model...`);
+            break; // Break inner loop (keys) to try next model in outer loop
+          }
+          // For other errors (quota, 500), try next key
+          continue;
+        }
       }
     }
-  }
-  throw new Error(`All models/keys exhausted:\n${errors.slice(0,6).join("\n")}`);
+    throw new Error(`AI Analysis failed. All models/keys tried or exhausted.\nLast error: ${errors[errors.length-1]}`);
 }
 
 export async function POST(req: NextRequest) {
