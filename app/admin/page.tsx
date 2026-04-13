@@ -153,6 +153,12 @@ export default function AdminPage() {
   const [errFilter, setErrFilter]             = useState<"all"|"today"|"7d"|"unresolved"|"quota"|"frontend"|string>("all");
   const [errSearch, setErrSearch]             = useState("");
   const [expandedErr, setExpandedErr]         = useState<string|null>(null);
+  
+  // ── User Intelligence States ──────────────────────────────
+  const [inspectedUser, setInspectedUser]     = useState<UserRow|null>(null);
+  const [inspectedHistory, setInspectedHistory] = useState<any[]>([]);
+  const [inspectLoading, setInspectLoading]   = useState(false);
+  const [inspectTab, setInspectTab]           = useState<"intel"|"history">("intel");
 
   const isAdmin = useMemo(()=>user?.email?.toLowerCase()===ADMIN_EMAIL.toLowerCase(),[user]);
   const st=(m:string)=>{setToast(m);setTimeout(()=>setToast(""),3200);};
@@ -244,9 +250,22 @@ export default function AdminPage() {
     ["settings","Settings",<Settings size={13}/>],
   ];
 
-  const handleUpdateUser=async(uid:string,data:Partial<UserRow>)=>{
     try{ await ap({action:"updateUser",uid,data}); setUsers(p=>p.map(u=>u.uid===uid?{...u,...data}:u)); st("✅ User updated"); }
     catch(e){ st("❌ "+(e instanceof Error?e.message:e)); }
+  };
+
+  const handleInspectUser = async (u: UserRow) => {
+    setInspectedUser(u);
+    setInspectLoading(true);
+    setInspectTab("intel");
+    try {
+      const res = await fetch(`/api/admin?action=userHistory&uid=${u.uid}`, {
+        headers: { "x-admin-key": process.env.NEXT_PUBLIC_ADMIN_SECRET_KEY || "admin-secret-2025" }
+      });
+      const data = await res.json();
+      setInspectedHistory(data.history || []);
+    } catch { st("❌ Failed to load history"); }
+    finally { setInspectLoading(false); }
   };
   const handleDelete=async(uid:string)=>{
     if(!confirm("Delete this user permanently?")) return;
@@ -543,6 +562,7 @@ export default function AdminPage() {
                             <div style={{display:"flex",gap:4}}>
                               <button title={u.role==="admin"?"Demote":"Make Admin"} onClick={()=>handleUpdateUser(u.uid,{role:u.role==="admin"?"user":"admin"})} style={{padding:"3px 7px",borderRadius:5,border:`1px solid ${S.border}`,background:"transparent",color:u.role==="admin"?"#f59e0b":S.tx3,cursor:"pointer"}}><Crown size={10}/></button>
                               <button title={u.status==="banned"?"Unban":"Ban"} onClick={()=>handleUpdateUser(u.uid,{status:u.status==="banned"?"active":"banned"})} style={{padding:"3px 7px",borderRadius:5,border:`1px solid ${S.border}`,background:"transparent",color:u.status==="banned"?"#22c55e":"#ef4444",cursor:"pointer"}}>{u.status==="banned"?<UserCheck size={10}/>:<Ban size={10}/>}</button>
+                              <button title="User Intelligence" onClick={()=>handleInspectUser(u)} style={{padding:"3px 7px",borderRadius:5,border:`1px solid rgba(99,102,241,.4)`,background:"rgba(99,102,241,.1)",color:"#818cf8",cursor:"pointer"}}><Zap size={10}/></button>
                               <button title="Details / Notes" onClick={()=>{if(expandedUid===u.uid){setExpUid(null);}else{setExpUid(u.uid);setEditNote(u.note||"");setEditCDL(u.customDailyLimit??null);}}} style={{padding:"3px 7px",borderRadius:5,border:`1px solid ${S.border}`,background:expandedUid===u.uid?"rgba(99,102,241,.2)":"transparent",color:"#818cf8",cursor:"pointer"}}>{expandedUid===u.uid?<ChevronUp size={10}/>:<ChevronDown size={10}/>}</button>
                               <button title="Delete User" onClick={()=>handleDelete(u.uid)} style={{padding:"3px 7px",borderRadius:5,border:"1px solid rgba(239,68,68,.3)",background:"transparent",color:"#f87171",cursor:"pointer"}}><Trash2 size={10}/></button>
                             </div>
@@ -993,7 +1013,151 @@ export default function AdminPage() {
         </div>
       </main>
 
+      {/* ── User Intelligence Overlay ── */}
+      {inspectedUser && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.85)", backdropFilter:"blur(12px)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+          <div style={{ width:"100%", maxWidth:1000, height:"90vh", background:"#0f0f13", border:`1px solid ${S.border}`, borderRadius:24, display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 32px 64px rgba(0,0,0,.5)" }}>
+            
+            {/* Modal Header */}
+            <div style={{ padding:"20px 24px", background:"rgba(255,255,255,.02)", borderBottom:`1px solid ${S.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:"rgba(99,102,241,.1)", border:"1px solid rgba(99,102,241,.3)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <Users size={20} color="#818cf8" />
+                </div>
+                <div>
+                  <div style={{ fontSize:18, fontWeight:700, color:"#fff" }}>{inspectedUser.name || "Unknown User"}</div>
+                  <div style={{ fontSize:13, color:S.tx3 }}>Intelligence & Behavior Analysis</div>
+                </div>
+              </div>
+              <button onClick={()=>setInspectedUser(null)} style={{ width:32, height:32, borderRadius:8, background:"rgba(255,255,255,.05)", border:"none", color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+            </div>
+
+            {/* Modal Tabs */}
+            <div style={{ padding:"0 24px", background:"rgba(255,255,255,.01)", borderBottom:`1px solid ${S.border}`, display:"flex", gap:24 }}>
+              <button onClick={()=>setInspectTab("intel")} style={{ padding:"14px 0", fontSize:13, fontWeight:600, color:inspectTab==="intel"?"#818cf8":S.tx3, borderBottom:inspectTab==="intel"?"2px solid #818cf8":"2px solid transparent", background:"none", cursor:"pointer" }}>📊 Profile Intelligence</button>
+              <button onClick={()=>setInspectTab("history")} style={{ padding:"14px 0", fontSize:13, fontWeight:600, color:inspectTab==="history"?"#818cf8":S.tx3, borderBottom:inspectTab==="history"?"2px solid #818cf8":"2px solid transparent", background:"none", cursor:"pointer" }}>📜 Full History Browser ({inspectedHistory.length})</button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ flex:1, overflowY:"auto", padding:24 }}>
+              {inspectLoading ? (
+                <div style={{ height:"100%", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:12 }}>
+                  <RefreshCw size={24} color="#818cf8" className="animate-spin" />
+                  <div style={{ fontSize:13, color:S.tx3 }}>Fetching deep user data...</div>
+                </div>
+              ) : (
+                <>
+                  {inspectTab === "intel" ? (
+                    <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:24 }}>
+                      {/* Left: Stats Card */}
+                      <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+                        <div style={{ padding:20, background:"rgba(255,255,255,.03)", border:`1px solid ${S.border}`, borderRadius:16 }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:S.tx3, textTransform:"uppercase", letterSpacing:".05em", marginBottom:16 }}>Basic Info</div>
+                          <StatRow label="Email" value={inspectedUser.email} />
+                          <StatRow label="Plan" value={inspectedUser.plan} />
+                          <StatRow label="Total Prompts" value={inspectedUser.totalPrompts || 0} />
+                          <StatRow label="Joined" value={new Date(inspectedUser.createdAt || 0).toLocaleDateString()} />
+                          <StatRow label="Last Active" value={new Date(inspectedUser.lastActiveAt || 0).toLocaleDateString()} />
+                        </div>
+
+                        <div style={{ padding:20, background:"rgba(255,255,255,.03)", border:`1px solid ${S.border}`, borderRadius:16 }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:S.tx3, textTransform:"uppercase", letterSpacing:".05em", marginBottom:16 }}>Risk Signals</div>
+                          {inspectedHistory.length > 50 ? (
+                            <div style={{ color:"#f87171", fontSize:13, display:"flex", gap:8 }}><AlertTriangle size={14}/> High Prompt Volume</div>
+                          ) : (
+                            <div style={{ color:"#4ade80", fontSize:13, display:"flex", gap:8 }}><CheckCircle size={14}/> Low Risk Profile</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Charts & Analysis */}
+                      <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+                          <div style={{ padding:20, background:"rgba(99,102,241,.05)", border:"1px solid rgba(99,102,241,.2)", borderRadius:16 }}>
+                            <div style={{ fontSize:12, fontWeight:700, color:"#a5b4fc", marginBottom:12 }}>USAGE BREAKDOWN</div>
+                            {(() => {
+                              const catCounts: any = { code:0, image:0, business:0, creative:0, general:0 };
+                              inspectedHistory.forEach(h => catCounts[h.category as string] = (catCounts[h.category as string] || 0) + 1);
+                              const total = Math.max(inspectedHistory.length, 1);
+                              return (
+                                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                                  {Object.keys(catCounts).map(cat => (
+                                    <div key={cat} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                      <div style={{ width:60, fontSize:11, color:S.tx3, textTransform:"capitalize" }}>{cat}</div>
+                                      <div style={{ flex:1, height:6, background:"rgba(255,255,255,.05)", borderRadius:3, overflow:"hidden" }}>
+                                        <div style={{ width:`${Math.round((catCounts[cat]/total)*100)}%`, height:"100%", background:"#818cf8" }} />
+                                      </div>
+                                      <div style={{ width:30, fontSize:11, color:S.tx2, textAlign:"right" }}>{Math.round((catCounts[cat]/total)*100)}%</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          <div style={{ padding:20, background:"rgba(255,255,255,.03)", border:`1px solid ${S.border}`, borderRadius:16 }}>
+                            <div style={{ fontSize:12, fontWeight:700, color:S.tx3, marginBottom:12 }}>BEHAVIOR INTELLIGENCE</div>
+                            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                              <div>
+                                <div style={{ fontSize:11, color:S.tx3 }}>User Level</div>
+                                <div style={{ fontSize:15, fontWeight:700, color:"#fff" }}>{inspectedHistory.length > 50 ? "Advanced " : inspectedHistory.length > 10 ? "Intermediate" : "Beginner"} User</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize:11, color:S.tx3 }}>Avg. Prompt Complexity</div>
+                                <div style={{ fontSize:15, fontWeight:700, color:"#fff" }}>{Math.round(inspectedHistory.reduce((s,h)=>(s+(h.originalIdea?.length||0)),0)/Math.max(inspectedHistory.length,1))} chars</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ padding:20, background:"rgba(255,255,255,.03)", border:`1px solid ${S.border}`, borderRadius:16 }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:S.tx3, marginBottom:16 }}>INTELLIGENCE SUMMARY</div>
+                          <p style={{ fontSize:14, color:S.tx2, lineHeight:1.6 }}>
+                            Based on {inspectedHistory.length} interactions, this user primarily focuses on <strong>{Object.entries(inspectedHistory.reduce((acc:any,h)=>({ ...acc, [h.category]: (acc[h.category]||0)+1 }),{})).sort((a,b)=>b[1]-a[1])[0]?.[0] || "general"}</strong> topics. 
+                            Their activity suggests a <strong>{inspectedHistory.length > 30 ? "high engagement" : "sporadic"}</strong> usage pattern. 
+                            No immediate risk factors detected in prompt telemetry.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                      {inspectedHistory.length === 0 ? (
+                        <div style={{ padding:40, textAlign:"center", color:S.tx3 }}>No history items to display.</div>
+                      ) : (
+                        inspectedHistory.map((h, i) => (
+                          <div key={h.id || i} style={{ padding:16, background:"rgba(255,255,255,.02)", border:`1px solid ${S.border}`, borderRadius:12 }}>
+                            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                                <span style={{ fontSize:11, fontWeight:700, background:"rgba(99,102,241,.1)", color:"#818cf8", padding:"2px 8px", borderRadius:6, textTransform:"uppercase" }}>{h.category}</span>
+                                <span style={{ fontSize:12, color:S.tx3 }}>{new Date(h.timestamp).toLocaleString()}</span>
+                              </div>
+                              <code style={{ fontSize:11, color:S.tx3 }}>{h.id?.slice(0,8)}</code>
+                            </div>
+                            <div style={{ fontSize:14, color:"#fff", fontWeight:600, marginBottom:8 }}>Q: {h.originalIdea}</div>
+                            <div style={{ fontSize:13, color:S.tx2, background:"rgba(0,0,0,.2)", padding:12, borderRadius:8, fontFamily:"monospace", border:`1px solid ${S.border}` }}>
+                              {h.engineeredPrompt?.slice(0, 400)}{h.engineeredPrompt?.length > 400 && "..."}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {toast&&<div style={{position:"fixed",bottom:24,right:24,zIndex:9999,padding:"10px 18px",borderRadius:10,background:"rgba(18,18,24,.97)",border:`1px solid ${S.border}`,fontSize:13,color:S.tx1,fontWeight:500,boxShadow:"0 8px 32px rgba(0,0,0,.6)",backdropFilter:"blur(12px)"}}>{toast}</div>}
+    </div>
+  );
+}
+
+function StatRow({ label, value }: { label:string; value:any }) {
+  return (
+    <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,.03)" }}>
+      <span style={{ color:S.tx3 }}>{label}</span>
+      <span style={{ color:"#fff", fontWeight:600 }}>{value}</span>
     </div>
   );
 }

@@ -111,6 +111,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ errors });
     }
 
+    if (action === "userHistory") {
+      const uid = new URL(req.url).searchParams.get("uid");
+      if (!uid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
+      const snap = await db.collection("users").doc(uid).collection("history").orderBy("timestamp", "desc").limit(100).get();
+      return NextResponse.json({ history: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    }
+
     if (action === "exportCSV") {
       const snap = await db.collection("users").get();
       const rows = snap.docs.map(d => {

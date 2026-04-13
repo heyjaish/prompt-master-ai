@@ -237,6 +237,12 @@ export default function HomePage() {
   };
 
   const handleSpecialistActivate = (s: Specialist | null) => {
+    // If we're starting fresh (no history selected) or just clicked New Chat, 
+    // switching specialists should clear the view to stay fresh.
+    if (!selectedId) {
+      setMessages([]);
+      setLatestPrompt(null);
+    }
     setSpecialist(s);
     setChipsRefresh(n => n + 1);
     if (s && user) trackEvent({ uid: user.uid, event: "specialist_activated", metadata: { name: s.name } });
@@ -429,8 +435,10 @@ export default function HomePage() {
           {/* ── Smart Suggestion Panel (right side) ─────────── */}
           <SmartSuggestionPanel
             activeSpecialist={activeSpecialist}
+            history={history}
             userKeywords={learnedKeywords}
             onInsert={handleInsert}
+            uid={user?.uid}
           />
         </div>
       </div>

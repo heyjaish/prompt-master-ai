@@ -1,72 +1,74 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Sparkles, ChevronRight, ChevronLeft, Zap, Brain } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Sparkles, ChevronRight, ChevronLeft, Zap, Brain, Loader2 } from "lucide-react";
 import type { Specialist } from "@/components/SpecialistBar";
+import type { HistoryEntry } from "@/lib/history";
 
 interface Props {
   activeSpecialist: Specialist | null;
-  userKeywords: string[];        // from learning chips
+  history: HistoryEntry[];
+  userKeywords: string[];
   onInsert: (text: string) => void;
+  uid?: string;
 }
 
-// Curated suggestions per specialist domain keyword
-const DOMAIN_SUGGESTIONS: Record<string, string[]> = {
-  image: [
-    "cinematic lighting", "8K ultra HD", "hyperrealistic", "sharp focus",
-    "dramatic shadows", "portrait lens 85mm", "bokeh background", "Unreal Engine 5",
-    "golden hour", "cyberpunk aesthetic", "photorealistic", "--v 6 --ar 16:9",
-    "octane render", "Studio lighting", "RAW photo", "color grading",
-  ],
-  video: [
-    "cinematic 4K", "smooth slow motion", "dynamic transitions", "color grading",
-    "drone shot", "handheld footage", "time lapse", "VFX compositing",
-    "professional edit", "viral hook", "trending format", "storytelling arc",
-  ],
-  code: [
-    "TypeScript strict", "React 18 hooks", "clean architecture", "add error handling",
-    "optimize performance", "add comments", "REST API", "responsive design",
-    "dark mode support", "Tailwind CSS", "unit tests", "async/await",
-    "SOLID principles", "Docker ready", "API endpoints",
-  ],
-  business: [
-    "professional tone", "persuasive copy", "call to action", "target audience",
-    "pain points", "value proposition", "ROI focused", "B2B strategy",
-    "email marketing", "brand voice", "conversion optimized", "data-driven",
-  ],
-  creative: [
-    "vivid storytelling", "emotional depth", "unique perspective", "descriptive language",
-    "plot twist", "character development", "immersive world", "poetic rhythm",
-    "dramatic tension", "creative hook", "metaphorical", "narrative arc",
-  ],
-  general: [
-    "step by step", "with examples", "bullet points", "professional tone",
-    "concise and clear", "creative approach", "detailed explanation",
-    "practical advice", "expert perspective", "actionable tips",
-  ],
-};
-
-function detectDomain(specialist: Specialist | null): string {
-  if (!specialist) return "general";
-  const text = (specialist.name + " " + (specialist.description ?? "")).toLowerCase();
-  if (/image|photo|art|visual|draw|design|midjourney|dall/i.test(text)) return "image";
-  if (/video|film|reel|youtube|tiktok|script/i.test(text)) return "video";
-  if (/code|tech|dev|program|react|python|api|build/i.test(text)) return "code";
-  if (/business|market|sales|email|copy|brand|seo/i.test(text)) return "business";
-  if (/creative|write|story|poem|blog|content/i.test(text)) return "creative";
-  return "general";
-}
-
-export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, onInsert }: Props) {
+export default function SmartSuggestionPanel({ activeSpecialist, history, userKeywords, onInsert, uid }: Props) {
   const [open, setOpen] = useState(true);
   const [clicked, setClicked] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [tips, setTips] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<Record<string, string[]>>({});
 
+  // ── Load Favorites ──────────────────────────────────────────
   useEffect(() => {
     try {
       const stored = localStorage.getItem("pm_panel_favorites");
       if (stored) setFavorites(JSON.parse(stored));
     } catch {}
   }, []);
+
+  const detectDomain = (specialist: Specialist | null): string => {
+    if (!specialist) return "general";
+    const text = (specialist.name + " " + (specialist.description ?? "")).toLowerCase();
+    if (/image|photo|art|visual|draw|design|midjourney|dall/i.test(text)) return "image";
+    if (/video|film|reel|youtube|tiktok|script/i.test(text)) return "video";
+    if (/code|tech|dev|program|react|python|api|build/i.test(text)) return "code";
+    if (/business|market|sales|email|copy|brand|seo/i.test(text)) return "business";
+    if (/creative|write|story|poem|blog|content/i.test(text)) return "creative";
+    return "general";
+  };
+
+  // ── Fetch Intelligent Suggestions ───────────────────────────
+  const fetchSuggestions = useCallback(async () => {
+    if (!uid) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid,
+          history: history.slice(0, 10).map(h => ({ category: h.category, originalIdea: h.originalIdea })),
+          activeSpecialist,
+          userKeywords: userKeywords.slice(0, 5)
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestions(data.suggestions || []);
+        setTips(data.tips || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch suggestions:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [uid, activeSpecialist, history.length, userKeywords.length]);
+
+  useEffect(() => {
+    fetchSuggestions();
+  }, [fetchSuggestions]);
 
   const toggleFavorite = (text: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -82,27 +84,19 @@ export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, o
   };
 
   const domain = detectDomain(activeSpecialist);
-  const domainSuggestions = DOMAIN_SUGGESTIONS[domain] ?? DOMAIN_SUGGESTIONS.general;
-
-  const domainFavs = favorites[domain] || [];
-  
-  // Merge user keywords, favorites, and domain suggestions
-  const userTop = userKeywords.slice(0, 4).filter(k => !domainFavs.includes(k) && !domainSuggestions.some(d => d.toLowerCase() === k.toLowerCase()));
-  const favList = domainFavs.filter(k => !domainSuggestions.some(d => d.toLowerCase() === k.toLowerCase()));
-  
-  // Create final list, putting favs at the top of domain suggestions
-  const finalDomainSuggestions = Array.from(new Set([...domainFavs, ...domainSuggestions])).slice(0, 20);
+  const domainLabel: Record<string, string> = {
+    image: "🖼️ Image", video: "🎬 Video", code: "💻 Code",
+    business: "💼 Business", creative: "✍️ Creative", general: "⚡ General",
+  };
 
   const handleClick = (text: string) => {
     onInsert(text);
     setClicked(text);
     setTimeout(() => setClicked(null), 1200);
+    // Future: Track click persistence here
   };
 
-  const domainLabel: Record<string, string> = {
-    image: "🖼️ Image", video: "🎬 Video", code: "💻 Code",
-    business: "💼 Business", creative: "✍️ Creative", general: "⚡ General",
-  };
+  const domainFavs = favorites[domain] || [];
 
   return (
     <div style={{
@@ -113,68 +107,76 @@ export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, o
       <button
         onClick={() => setOpen(o => !o)}
         style={{
-          position: "absolute", left: -13, top: "50%", transform: "translateY(-50%)",
-          width: 22, height: 44, borderRadius: "8px 0 0 8px",
-          background: "rgba(99,102,241,.15)", border: "1px solid rgba(99,102,241,.3)",
+          position: "absolute", left: -14, top: "50%", transform: "translateY(-50%)",
+          width: 24, height: 48, borderRadius: "8px 0 0 8px",
+          background: "rgba(99,102,241,.18)", border: "1px solid rgba(99,102,241,.32)",
           borderRight: "none", color: "#818cf8", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
           zIndex: 10, transition: "background .15s",
         }}
-        onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,.3)")}
-        onMouseLeave={e => (e.currentTarget.style.background = "rgba(99,102,241,.15)")}
-        title={open ? "Hide suggestions" : "Show AI suggestions"}
+        onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,.35)")}
+        onMouseLeave={e => (e.currentTarget.style.background = "rgba(99,102,241,.18)")}
       >
-        {open ? <ChevronRight size={12}/> : <ChevronLeft size={12}/>}
+        {open ? <ChevronRight size={13}/> : <ChevronLeft size={13}/>}
       </button>
 
       {/* Panel */}
       <div style={{
-        width: open ? 200 : 0,
+        width: open ? 210 : 0,
         overflow: "hidden",
-        transition: "width .22s cubic-bezier(.4,0,.2,1)",
-        background: "rgba(9,9,13,.97)",
+        transition: "width .25s cubic-bezier(.4,0,.2,1)",
+        background: "rgba(9,9,13,.98)",
         borderLeft: "1px solid rgba(99,102,241,.18)",
         display: "flex", flexDirection: "column",
         flexShrink: 0,
       }}>
-        <div style={{ width: 200, display: "flex", flexDirection: "column", height: "100%", padding: "12px 10px" }}>
+        <div style={{ width: 210, display: "flex", flexDirection: "column", height: "100%", padding: "14px 12px" }}>
+          
           {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flexShrink: 0 }}>
-            <div style={{ width: 22, height: 22, borderRadius: 7, background: "rgba(99,102,241,.2)", border: "1px solid rgba(99,102,241,.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Brain size={11} color="#818cf8"/>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ width: 24, height: 24, borderRadius: 8, background: "rgba(99,102,241,.25)", border: "1px solid rgba(99,102,241,.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Brain size={13} color="#818cf8"/>
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, fontWeight: 800, color: "#fff", letterSpacing: ".02em" }}>SUGGESTIONS</div>
+                <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.4)" }}>{domainLabel[domain]} Intelligence</div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#a5b4fc", letterSpacing: ".04em" }}>AI SUGGESTIONS</div>
-              <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.3)" }}>{domainLabel[domain]}</div>
-            </div>
+            {loading && <Loader2 size={12} className="animate-spin" color="#6366f1" />}
           </div>
 
-          <div className="panel-scroll" style={{ overflowY: "auto", flex: 1, paddingRight: 4, display: "flex", flexDirection: "column" }}>
-            {/* User keywords section (if any) */}
-            {userTop.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
-                  <Sparkles size={8} color="#6366f1"/> Your Style
+          <div className="panel-scroll" style={{ overflowY: "auto", flex: 1, paddingRight: 4, display: "flex", flexDirection: "column", gap: 18 }}>
+            
+            {/* SECTION A: AI SUGGESTIONS */}
+            {(suggestions.length > 0 || loading) && (
+              <div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,.35)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                  <Sparkles size={10} color="#6366f1"/> Smart Actions
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  {userTop.map(kw => (
-                    <Chip key={kw} text={kw} active={clicked === kw} onClick={() => handleClick(kw)} accent="#6366f1"/>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5.5 }}>
+                  {suggestions.map(text => (
+                    <Chip key={text} text={text} active={clicked === text} onClick={() => handleClick(text)} accent="#6366f1"/>
                   ))}
+                  {loading && suggestions.length === 0 && Array(6).fill(0).map((_,i) => <Skeleton key={i} />)}
                 </div>
               </div>
             )}
 
-            {/* Domain suggestions */}
-            <div>
-              <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
-                <Zap size={8} color="#8b5cf6"/> {domainLabel[domain]} Tips
+            {/* SECTION B: SMART TIPS */}
+            {(tips.length > 0 || loading) && (
+              <div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,.35)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                  <Zap size={10} color="#8b5cf6"/> Deep Tips
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5.5 }}>
+                  {tips.map(text => (
+                    <Chip key={text} text={text} active={clicked === text} isFav={domainFavs.includes(text)} onToggleFav={(e) => toggleFavorite(text, e)} onClick={() => handleClick(text)} accent="#8b5cf6"/>
+                  ))}
+                  {loading && tips.length === 0 && Array(8).fill(0).map((_,i) => <Skeleton key={i} />)}
+                </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                {finalDomainSuggestions.map(kw => (
-                  <Chip key={kw} text={kw} active={clicked === kw} isFav={domainFavs.includes(kw)} onToggleFav={(e) => toggleFavorite(kw, e)} onClick={() => handleClick(kw)} accent="#8b5cf6"/>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
 
           <style>{`
@@ -182,16 +184,19 @@ export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, o
             .panel-scroll::-webkit-scrollbar-track { background: transparent; }
             .panel-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
             .panel-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+            @keyframes pulse-op { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.6; } }
+            .animate-pulse-op { animation: pulse-op 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            .animate-spin { animation: spin 1s linear infinite; }
           `}</style>
-
-          {/* Footer */}
-          <div style={{ marginTop: 8, fontSize: 9.5, color: "rgba(255,255,255,.2)", textAlign: "center", flexShrink: 0 }}>
-            Click to insert → prompt
-          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function Skeleton() {
+  return <div className="animate-pulse-op" style={{ height: 28, background: "rgba(255,255,255,.05)", borderRadius: 8, width: "100%" }} />;
 }
 
 function Chip({ text, active, isFav, onToggleFav, onClick, accent }: { text: string; active: boolean; isFav?: boolean; onToggleFav?: (e: React.MouseEvent) => void; onClick: () => void; accent: string }) {
@@ -205,15 +210,14 @@ function Chip({ text, active, isFav, onToggleFav, onClick, accent }: { text: str
       <button
         onClick={onClick}
         style={{
-          width: "100%", textAlign: "left", padding: "6px 24px 6px 9px",
-          borderRadius: 8, border: `1px solid ${active ? accent + "66" : "rgba(255,255,255,.07)"}`,
-          background: active ? `${accent}22` : hover ? `${accent}18` : "rgba(255,255,255,.03)",
-          color: active ? "#c4b5fd" : hover ? "#e2e8f0" : "rgba(255,255,255,.55)",
+          width: "100%", textAlign: "left", padding: "7px 24px 7px 10px",
+          borderRadius: 8, border: `1px solid ${active ? accent + "66" : "rgba(255,255,255,.08)"}`,
+          background: active ? `${accent}25` : hover ? `${accent}15` : "rgba(255,255,255,.04)",
+          color: active ? "#fff" : hover ? "#f1f5f9" : "rgba(255,255,255,.6)",
           fontSize: 11.5, cursor: "pointer", transition: "all .12s",
-          whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3,
-          minHeight: 28, display: "flex", alignItems: "center"
+          whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.35,
+          minHeight: 30, display: "flex", alignItems: "center", fontWeight: 500
         }}
-        title={`Insert: "${text}"`}
       >
         {text}
       </button>
@@ -224,11 +228,10 @@ function Chip({ text, active, isFav, onToggleFav, onClick, accent }: { text: str
           style={{
             position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
             background: "none", border: "none", cursor: "pointer",
-            color: isFav ? "#fbbf24" : "rgba(255,255,255,0.2)",
+            color: isFav ? "#fbbf24" : "rgba(255,255,255,0.25)",
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: 2, borderRadius: 4, transition: "color 0.2s"
           }}
-          title={isFav ? "Remove from favorites" : "Add to favorites"}
         >
           {isFav ? "★" : "☆"}
         </button>
