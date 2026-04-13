@@ -942,7 +942,7 @@ export default function AdminPage() {
                               >
                                 <User size={10} />
                                 {(() => {
-                                  const foundUser = allUsers.find(u => u.uid === e.uid);
+                                  const foundUser = users.find(u => u.uid === e.uid);
                                   const email = e.email !== "unknown" && e.email !== "see uid" ? e.email : (foundUser?.email || e.uid?.slice(0, 10) + "…");
                                   return email;
                                 })()}
