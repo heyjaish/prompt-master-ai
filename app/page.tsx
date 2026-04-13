@@ -213,6 +213,7 @@ export default function HomePage() {
     setLatestPrompt(null); 
     setInputCollapsed(false);
     setAppendText("");
+    setSpecialist(null);
   };
 
   const handleInsert = (text: string) => {
@@ -356,7 +357,7 @@ export default function HomePage() {
                           <button
                             onClick={() => setInputCollapsed(true)}
                             title="Minimize input panel"
-                            style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(234,179,8,.15)", color: "#eab308", border: "1px solid rgba(234,179,8,.3)", borderRadius: 6, cursor: "pointer", transition: "all .15s" }}
+                            style={{ position: "absolute", top: -18, left: 0, zIndex: 10, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(234,179,8,.15)", color: "#eab308", border: "1px solid rgba(234,179,8,.3)", borderRadius: 6, cursor: "pointer", transition: "all .15s" }}
                             onMouseEnter={e => { e.currentTarget.style.background = "rgba(234,179,8,.25)"; }}
                             onMouseLeave={e => { e.currentTarget.style.background = "rgba(234,179,8,.15)"; }}
                           >

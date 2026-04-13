@@ -149,28 +149,32 @@ export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, o
             </div>
           </div>
 
-          {/* User keywords section (if any) */}
-          {userTop.length > 0 && (
-            <>
-              <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 5, display: "flex", alignItems: "center", gap: 4 }}>
-                <Sparkles size={8} color="#6366f1"/> Your Style
+          <div className="panel-scroll" style={{ overflowY: "auto", flex: 1, paddingRight: 4, display: "flex", flexDirection: "column" }}>
+            {/* User keywords section (if any) */}
+            {userTop.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                  <Sparkles size={8} color="#6366f1"/> Your Style
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {userTop.map(kw => (
+                    <Chip key={kw} text={kw} active={clicked === kw} onClick={() => handleClick(kw)} accent="#6366f1"/>
+                  ))}
+                </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 8 }}>
-                {userTop.map(kw => (
-                  <Chip key={kw} text={kw} active={clicked === kw} onClick={() => handleClick(kw)} accent="#6366f1"/>
+            )}
+
+            {/* Domain suggestions */}
+            <div>
+              <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                <Zap size={8} color="#8b5cf6"/> {domainLabel[domain]} Tips
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {finalDomainSuggestions.map(kw => (
+                  <Chip key={kw} text={kw} active={clicked === kw} isFav={domainFavs.includes(kw)} onToggleFav={(e) => toggleFavorite(kw, e)} onClick={() => handleClick(kw)} accent="#8b5cf6"/>
                 ))}
               </div>
-            </>
-          )}
-
-          {/* Domain suggestions */}
-          <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 5, display: "flex", alignItems: "center", gap: 4 }}>
-            <Zap size={8} color="#8b5cf6"/> {domainLabel[domain]} Tips
-          </div>
-          <div className="panel-scroll" style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", flex: 1, paddingRight: 4 }}>
-            {finalDomainSuggestions.map(kw => (
-              <Chip key={kw} text={kw} active={clicked === kw} isFav={domainFavs.includes(kw)} onToggleFav={(e) => toggleFavorite(kw, e)} onClick={() => handleClick(kw)} accent="#8b5cf6"/>
-            ))}
+            </div>
           </div>
 
           <style>{`

@@ -256,7 +256,8 @@ export async function POST(req: NextRequest) {
     // ── Auto-log error to admin error monitor ─────────────────
     try {
       const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-      fetch(`${base}/api/admin`, {
+      // We must await this, or Vercel kills the unawaited fetch immediately when returning
+      await fetch(`${base}/api/admin`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_KEY },
         body: JSON.stringify({
@@ -271,7 +272,7 @@ export async function POST(req: NextRequest) {
           specialist:   body?.specialistName ?? null,
           modelUsed:    modelName ?? null,
         }),
-      }).catch(() => {}); // never block
+      }).catch(e => console.error("Error logging failed:", e));
     } catch { /* never block UI for logging */ }
 
     return NextResponse.json({
