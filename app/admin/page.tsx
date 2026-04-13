@@ -935,16 +935,19 @@ export default function AdminPage() {
                                   setSrch(e.email !== "unknown" && e.email !== "see uid" ? e.email : e.uid);
                                 }}
                                 style={{
-                                  fontSize: 11.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5,
-                                  background: "rgba(255,255,255,.03)", padding: "2px 8px", borderRadius: 6, cursor: "pointer"
+                                  fontSize: 12, color: "#fff", display: "flex", alignItems: "center", gap: 6,
+                                  background: "rgba(255,255,255,.08)", padding: "4px 10px", borderRadius: 8, 
+                                  cursor: "pointer", border: "1px solid rgba(255,255,255,.1)", fontWeight: 500
                                 }}
-                                title="Click to view user"
+                                title="Click to view user profile"
                               >
-                                <User size={10} />
+                                <User size={12} color="#a5b4fc" />
                                 {(() => {
-                                  const foundUser = users.find(u => u.uid === e.uid);
-                                  const email = e.email !== "unknown" && e.email !== "see uid" ? e.email : (foundUser?.email || e.uid?.slice(0, 10) + "…");
-                                  return email;
+                                  const u = users.find(u => u.uid === e.uid);
+                                  const hasEmail = e.email && e.email !== "unknown" && e.email !== "see uid";
+                                  if (u) return `${u.name || "User"} (${u.email})`;
+                                  if (hasEmail) return e.email;
+                                  return (e.uid === "anonymous" || !e.uid) ? "Anonymous" : `ID: ${e.uid.slice(0, 8)}`;
                                 })()}
                               </span>
                               {/* Resolved */}
