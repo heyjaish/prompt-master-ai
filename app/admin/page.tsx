@@ -1112,7 +1112,7 @@ export default function AdminPage() {
                         <div style={{ padding:20, background:"rgba(255,255,255,.03)", border:`1px solid ${S.border}`, borderRadius:16 }}>
                           <div style={{ fontSize:12, fontWeight:700, color:S.tx3, marginBottom:16 }}>INTELLIGENCE SUMMARY</div>
                           <p style={{ fontSize:14, color:S.tx2, lineHeight:1.6 }}>
-                            Based on {inspectedHistory.length} interactions, this user primarily focuses on <strong>{Object.entries(inspectedHistory.reduce((acc:any,h)=>({ ...acc, [h.category]: (acc[h.category]||0)+1 }),{})).sort((a,b)=>b[1]-a[1])[0]?.[0] || "general"}</strong> topics. 
+                            Based on {inspectedHistory.length} interactions, this user primarily focuses on <strong>{(Object.entries(inspectedHistory.reduce((acc:Record<string,number>,h:any)=>{const c=h.category||"general";acc[c]=(acc[c]||0)+1;return acc;},{} as Record<string,number>)) as [string,number][]).sort((a,b)=>b[1]-a[1])[0]?.[0] || "general"}</strong> topics. 
                             Their activity suggests a <strong>{inspectedHistory.length > 30 ? "high engagement" : "sporadic"}</strong> usage pattern. 
                             No immediate risk factors detected in prompt telemetry.
                           </p>
