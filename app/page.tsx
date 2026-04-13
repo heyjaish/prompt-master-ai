@@ -18,6 +18,7 @@ import { savePrompt, loadPrompts, deletePrompt } from "@/lib/firestore-history";
 import { useAuth }             from "@/lib/auth-context";
 import { trackEvent }          from "@/lib/analytics";
 import { extractKeywords }     from "@/lib/keywords";
+import { logFrontendError }    from "@/lib/error-logger";
 
 type ViewMode = "chat" | "split";
 const VIEW_PREF_KEY = "pm_view_pref";
@@ -188,6 +189,11 @@ export default function HomePage() {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       toast.error(msg, { duration: 6000 });
       if (user) trackEvent({ uid: user.uid, event: "error_occurred", metadata: { msg: msg.slice(0, 50) } });
+      logFrontendError({
+        uid: user?.uid, email: user?.email ?? "unknown",
+        errorType: msg.includes("quota") || msg.includes("limit") ? "quota_exhausted" : "api_error",
+        errorMessage: msg, severity: "High", userAction: "Send Prompt", stack: err instanceof Error ? err.stack : null
+      });
       setMessages(prev => prev.filter(m => m.id !== aid));
       setInputCollapsed(false);
     } finally {

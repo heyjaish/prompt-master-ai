@@ -168,20 +168,28 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "logError") {
-      // Log any error from any user — fire-and-forget from engineer route
-      const { uid, email, errorType, errorMessage, specialist, modelUsed, url } = body;
+      // Log any error from any user — fire-and-forget from engineer route or frontend
+      const { uid, email, errorType, errorMessage, specialist, modelUsed, url, severity, stack, route, userAction } = body;
       const ref = db.collection("errors").doc();
       await ref.set({
         uid:          uid          ?? "anonymous",
         email:        email        ?? "unknown",
         errorType:    errorType    ?? "unknown",
-        errorMessage: (errorMessage ?? "").slice(0, 500),
+        errorMessage: (errorMessage ?? "").slice(0, 1000),
+        severity:     severity     ?? "Medium",
+        stack:        (stack ?? "").slice(0, 2000),
+        route:        route        ?? url ?? null,
+        userAction:   userAction   ?? null,
         specialist:   specialist   ?? null,
         modelUsed:    modelUsed    ?? null,
-        url:          url          ?? null,
         timestamp:    Date.now(),
         resolved:     false,
       });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "resolveError" && body.errorId) {
+      await db.collection("errors").doc(body.errorId).update({ resolved: true, resolvedAt: Date.now() });
       return NextResponse.json({ ok: true });
     }
 

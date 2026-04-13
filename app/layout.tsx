@@ -3,6 +3,8 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/lib/auth-context";
 
+import ErrorTracker from "@/components/ErrorTracker";
+
 export const metadata: Metadata = {
   title: "Prompt Master AI — Specialist Prompt Engineering Tool",
   description: "Transform raw ideas into structured, professional AI prompts.",
@@ -21,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <AuthProvider>
+          <ErrorTracker />
           {children}
         </AuthProvider>
         <Toaster

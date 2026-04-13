@@ -269,6 +269,9 @@ export async function POST(req: NextRequest) {
                       : err instanceof Error && (err.message.includes("403") || err.message.includes("401")) ? "invalid_key"
                       : "api_error",
           errorMessage: message,
+          severity:     err instanceof Error && err.message.startsWith("ALL_MODELS") ? "Critical" : isQuotaError(err) ? "High" : "Medium",
+          stack:        err instanceof Error ? err.stack : null,
+          userAction:   "AI Generate Prompt",
           specialist:   body?.specialistName ?? null,
           modelUsed:    modelName ?? null,
         }),
