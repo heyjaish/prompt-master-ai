@@ -47,13 +47,14 @@ export async function GET(req: NextRequest) {
 
 // POST /api/keywords — save/increment keywords (specialist-scoped if provided)
 export async function POST(req: NextRequest) {
+  let uid = "unknown";
   try {
-    const { uid, keywords, specialistId } = await req.json() as {
-      uid: string;
-      keywords: string[];
-      specialistId?: string;
-    };
-    if (!uid || !keywords?.length) return NextResponse.json({ ok: true });
+    const body: any = await req.json();
+    uid = body.uid || "unknown";
+    const keywords = body.keywords as string[];
+    const specialistId = body.specialistId as string | undefined;
+    
+    if (!uid || uid === "unknown" || !keywords?.length) return NextResponse.json({ ok: true });
 
     const db  = await getDb();
     const col = kwCollection(uid, specialistId ?? null);
