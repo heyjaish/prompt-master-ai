@@ -964,8 +964,10 @@ export default function AdminPage() {
                     .sort((a,b)=>{
                       if(errSort==="oldest") return a.timestamp - b.timestamp;
                       if(errSort==="severity") {
-                        const m:any = {Critical:0,High:1,Medium:2,Low:3};
-                        return (m[a.severity]??2) - (m[b.severity]??2);
+                        const m: any = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+                        const sA = a.severity || "Medium";
+                        const sB = b.severity || "Medium";
+                        return (m[sA] ?? 2) - (m[sB] ?? 2);
                       }
                       return b.timestamp - a.timestamp; // newest
                     })
