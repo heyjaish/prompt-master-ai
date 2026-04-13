@@ -249,7 +249,7 @@ export default function AdminPage() {
     ["limits","Limits",<Sliders size={13}/>],
     ["settings","Settings",<Settings size={13}/>],
   ];
-
+  const handleUpdateUser = async (uid: string, data: Partial<UserRow>) => {
     try{ await ap({action:"updateUser",uid,data}); setUsers(p=>p.map(u=>u.uid===uid?{...u,...data}:u)); st("✅ User updated"); }
     catch(e){ st("❌ "+(e instanceof Error?e.message:e)); }
   };
