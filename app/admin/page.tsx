@@ -932,7 +932,7 @@ export default function AdminPage() {
                                 onClick={(ev) => {
                                   ev.stopPropagation();
                                   setTab("users");
-                                  setSearch(e.email !== "unknown" && e.email !== "see uid" ? e.email : e.uid);
+                                  setSrch(e.email !== "unknown" && e.email !== "see uid" ? e.email : e.uid);
                                 }}
                                 style={{
                                   fontSize: 11.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5,
