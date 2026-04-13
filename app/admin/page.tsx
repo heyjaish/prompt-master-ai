@@ -932,8 +932,12 @@ export default function AdminPage() {
               {/* Error Log Table */}
               <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:S.bdR,overflow:"hidden"}}>
                 <div style={{padding:"12px 16px",borderBottom:`1px solid ${S.border}`,display:"flex",alignItems:"center",gap:8}}>
-                  <input type="checkbox" checked={selectedErrors.size > 0 && selectedErrors.size === errorLogs.length} indeterminate={selectedErrors.size > 0 && selectedErrors.size < errorLogs.length} onChange={(e)=>{if(e.target.checked)setSelectedErrors(new Set(errorLogs.map(x=>x.id)));else setSelectedErrors(new Set());}}
-                                  <div style={{overflowY:"auto",maxHeight:520}}>
+                  <input type="checkbox" checked={selectedErrors.size > 0 && selectedErrors.size === errorLogs.length} onChange={(e)=>{if(e.target.checked)setSelectedErrors(new Set(errorLogs.map(x=>x.id)));else setSelectedErrors(new Set());}} style={{width:16,height:16,cursor:"pointer"}}/>
+                  <AlertCircle size={13} color="#f87171"/>
+                  <span style={{fontSize:13,fontWeight:600,color:S.tx1}}>Recent Errors</span>
+                </div>
+
+                <div style={{overflowY:"auto",maxHeight:520}}>
                     {errorLogs.filter(e => {
                       // Apply search filter
                       if (errSearch) {
@@ -987,13 +991,11 @@ export default function AdminPage() {
                               </div>
                               <div style={{fontSize:13,color:S.tx1,fontWeight:500,fontFamily:"JetBrains Mono, monospace"}}>{e.errorMessage}</div>
                             </div>
-                          </div>
-                        </div>
-                          
-                          {/* Expanded Details */}
-                          {isExpanded && (
-                            <div style={{padding:"0 16px 16px",marginTop:"-4px",display:"flex",flexDirection:"column",gap:8}}>
-                              {e.userAction && <div style={{fontSize:11.5,color:S.tx2}}><strong>Action triggered:</strong> {e.userAction}</div>}
+                            
+                            {/* Expanded Details */}
+                            {isExpanded && (
+                              <div style={{padding:"0 16px 16px",marginTop:"-4px",display:"flex",flexDirection:"column",gap:8}}>
+                                {e.userAction && <div style={{fontSize:11.5,color:S.tx2}}><strong>Action triggered:</strong> {e.userAction}</div>}
                               {(e.specialist || e.modelUsed) && (
                                 <div style={{fontSize:11.5,color:S.tx2,display:"flex",gap:16}}>
                                   {e.specialist && <span><strong>Specialist:</strong> {e.specialist}</span>}
@@ -1008,6 +1010,7 @@ export default function AdminPage() {
                               )}
                             </div>
                           )}
+                          </div>
                         </div>
                       );
                     })}
