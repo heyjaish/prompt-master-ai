@@ -114,8 +114,14 @@ export async function GET(req: NextRequest) {
     if (action === "userHistory") {
       const uid = new URL(req.url).searchParams.get("uid");
       if (!uid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
-      const snap = await db.collection("users").doc(uid).collection("history").orderBy("timestamp", "desc").limit(100).get();
-      return NextResponse.json({ history: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+      const [hSnap, pSnap] = await Promise.all([
+        db.collection("users").doc(uid).collection("history").orderBy("timestamp", "desc").limit(100).get(),
+        db.collection("users").doc(uid).collection("prompts").orderBy("timestamp", "desc").limit(100).get()
+      ]);
+      const merged = [...hSnap.docs.map(d=>({id:d.id, ...d.data()})), ...pSnap.docs.map(d=>({id:d.id, ...d.data()}))]
+        .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))
+        .slice(0, 100);
+      return NextResponse.json({ history: merged });
     }
 
     if (action === "exportCSV") {
@@ -197,6 +203,25 @@ export async function POST(req: NextRequest) {
 
     if (action === "resolveError" && body.errorId) {
       await db.collection("errors").doc(body.errorId).update({ resolved: true, resolvedAt: Date.now() });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "bulkResolveErrors" && body.errorIds) {
+      const batch = db.batch();
+      (body.errorIds as string[]).forEach(id => batch.update(db.collection("errors").doc(id), { resolved: true, resolvedAt: Date.now() }));
+      await batch.commit();
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "deleteError" && body.errorId) {
+      await db.collection("errors").doc(body.errorId).delete();
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "bulkDeleteErrors" && body.errorIds) {
+      const batch = db.batch();
+      (body.errorIds as string[]).forEach(id => batch.delete(db.collection("errors").doc(id)));
+      await batch.commit();
       return NextResponse.json({ ok: true });
     }
 

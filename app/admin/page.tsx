@@ -153,6 +153,8 @@ export default function AdminPage() {
   const [errFilter, setErrFilter]             = useState<"all"|"today"|"7d"|"unresolved"|"quota"|"frontend"|string>("all");
   const [errSearch, setErrSearch]             = useState("");
   const [expandedErr, setExpandedErr]         = useState<string|null>(null);
+  const [selectedErrors, setSelectedErrors]   = useState<Set<string>>(new Set());
+  const [errSort, setErrSort]                 = useState<"newest"|"oldest"|"severity">("newest");
   
   // ── User Intelligence States ──────────────────────────────
   const [inspectedUser, setInspectedUser]     = useState<UserRow|null>(null);
@@ -862,6 +864,13 @@ export default function AdminPage() {
                 <button onClick={loadErrors} disabled={errLogsLoading} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:9,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.04)",color:S.tx2,fontSize:12.5,cursor:"pointer"}}>
                   <RefreshCw size={12} style={{animation:errLogsLoading?"spin 1s linear infinite":undefined}}/> {errLogsLoading?"Loading…":"Refresh"}
                 </button>
+                <button onClick={()=>{
+                  const rows = errorLogs.map(e=>[new Date(e.timestamp).toISOString(),e.email,e.errorType,e.errorMessage.replace(/,/g," ")].join(","));
+                  const csv = "Timestamp,User,Type,Message\n"+rows.join("\n");
+                  const blob=new Blob([csv],{type:"text/csv"});
+                  const url=URL.createObjectURL(blob);
+                  const a=document.createElement("a"); a.href=url; a.download=`errors_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+                }} style={{padding:"7px 14px",borderRadius:9,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.04)",color:S.tx2,fontSize:12.5,cursor:"pointer"}}>💾 Export CSV</button>
               </div>
 
               {/* Stats Summary */}
@@ -896,34 +905,41 @@ export default function AdminPage() {
                   <input value={errSearch} onChange={e=>setErrSearch(e.target.value)} placeholder="Search by User UID or Email…"
                     style={{width:"100%",background:"rgba(255,255,255,.04)",border:`1px solid ${S.border}`,borderRadius:10,color:S.tx1,fontSize:12.5,padding:"8px 12px 8px 30px",outline:"none"}}/>
                 </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:12,color:S.tx3}}>Sort:</span>
+                  <select value={errSort} onChange={e=>setErrSort(e.target.value as any)}
+                    style={{background:"rgba(255,255,255,.05)",border:`1px solid ${S.border}`,borderRadius:8,color:S.tx2,fontSize:11.5,padding:"4px 8px",cursor:"pointer",outline:"none"}}>
+                    <option value="newest">Latest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="severity">Priority (High → Low)</option>
+                  </select>
+                </div>
               </div>
+
+              {/* Bulk Action Bar */}
+              {selectedErrors.size > 0 && (
+                <div style={{background:"rgba(99,102,241,.12)",border:`1px solid rgba(99,102,241,.3)`,borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",animation:"fadeIn .2s ease"}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"#a5b4fc"}}>{selectedErrors.size} errors selected</div>
+                  <div style={{display:"flex",gap:10}}>
+                    <button onClick={async()=>{if(!confirm(`Mark ${selectedErrors.size} errors as resolved?`))return;try{await ap({action:"bulkResolveErrors",errorIds:Array.from(selectedErrors)});setErrorLogs(p=>p.map(e=>selectedErrors.has(e.id)?{...e,resolved:true}:e));setSelectedErrors(new Set());st("✅ Bulk resolved");}catch(e){st("❌ Failed");}}}
+                      style={{padding:"6px 14px",borderRadius:8,border:"none",background:"#6366f1",color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer"}}>Resolve Selected</button>
+                    <button onClick={async()=>{if(!confirm(`Permanently delete ${selectedErrors.size} errors?`))return;try{await ap({action:"bulkDeleteErrors",errorIds:Array.from(selectedErrors)});setErrorLogs(p=>p.filter(e=>!selectedErrors.has(e.id)));setSelectedErrors(new Set());st("✅ Bulk deleted");}catch(e){st("❌ Failed");}}}
+                      style={{padding:"6px 14px",borderRadius:8,border:"1px solid rgba(239,68,68,.4)",background:"rgba(239,68,68,.1)",color:"#f87171",fontSize:12,fontWeight:600,cursor:"pointer"}}>Delete Selected</button>
+                  </div>
+                </div>
+              )}
 
               {/* Error Log Table */}
               <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:S.bdR,overflow:"hidden"}}>
                 <div style={{padding:"12px 16px",borderBottom:`1px solid ${S.border}`,display:"flex",alignItems:"center",gap:8}}>
-                  <AlertCircle size={13} color="#f87171"/>
-                  <span style={{fontSize:13,fontWeight:600,color:S.tx1}}>Recent Errors</span>
-                  <span style={{fontSize:11,color:S.tx3,marginLeft:"auto"}}>Most recent first · auto-logged from all users</span>
-                </div>
-
-                {errLogsLoading ? (
-                  <div style={{padding:"32px",textAlign:"center",color:S.tx3,fontSize:13}}>⏳ Loading errors…</div>
-                ) : errorLogs.length === 0 ? (
-                  <div style={{padding:"40px",textAlign:"center"}}>
-                    <div style={{fontSize:36,marginBottom:10}}>✅</div>
-                    <div style={{fontSize:14,fontWeight:600,color:S.tx1,marginBottom:6}}>No errors logged</div>
-                    <div style={{fontSize:12.5,color:S.tx3}}>Click Refresh to load — errors appear here automatically when users hit issues.</div>
-                  </div>
-                ) : (
-                  <div style={{overflowY:"auto",maxHeight:520}}>
+                  <input type="checkbox" checked={selectedErrors.size > 0 && selectedErrors.size === errorLogs.length} indeterminate={selectedErrors.size > 0 && selectedErrors.size < errorLogs.length} onChange={(e)=>{if(e.target.checked)setSelectedErrors(new Set(errorLogs.map(x=>x.id)));else setSelectedErrors(new Set());}}
+                                  <div style={{overflowY:"auto",maxHeight:520}}>
                     {errorLogs.filter(e => {
                       // Apply search filter
                       if (errSearch) {
-                        const searchArr = errSearch.toLowerCase();
-                        const matches = e.uid?.toLowerCase().includes(searchArr) || e.email?.toLowerCase().includes(searchArr) || e.errorMessage?.toLowerCase().includes(searchArr);
-                        if (!matches) return false;
+                        const sArr = errSearch.toLowerCase();
+                        return e.uid?.toLowerCase().includes(sArr) || e.email?.toLowerCase().includes(sArr) || e.errorMessage?.toLowerCase().includes(sArr);
                       }
-                      
                       if(errFilter==="unresolved") return !e.resolved;
                       if(errFilter==="quota") return e.errorType.includes("quota")||e.errorType.includes("limit");
                       if(errFilter==="frontend") return e.errorType.includes("frontend")||e.errorType.includes("unhandled")||e.errorType.includes("boundary");
@@ -931,57 +947,48 @@ export default function AdminPage() {
                       if(errFilter==="today") return new Date(e.timestamp).toISOString().slice(0,10) === new Date().toISOString().slice(0,10);
                       if(errFilter==="7d") return e.timestamp > Date.now() - 7*86400000;
                       return true;
-                    }).map((e,idx,arr)=>{
+                    })
+                    .sort((a,b)=>{
+                      if(errSort==="oldest") return a.timestamp - b.timestamp;
+                      if(errSort==="severity") {
+                        const m:any = {Critical:0,High:1,Medium:2,Low:3};
+                        return (m[a.severity]??2) - (m[b.severity]??2);
+                      }
+                      return b.timestamp - a.timestamp; // newest
+                    })
+                    .map((e,idx,arr)=>{
                       const typeColor = e.errorType.includes("quota")||e.errorType.includes("limit")?"#f59e0b":e.errorType==="invalid_key"?"#a78bfa":e.errorType.includes("frontend")||e.errorType.includes("rejection")?"#38bdf8":"#f87171";
                       const typeBg   = e.errorType.includes("quota")||e.errorType.includes("limit")?"rgba(245,158,11,.1)":e.errorType==="invalid_key"?"rgba(167,139,250,.1)":e.errorType.includes("frontend")||e.errorType.includes("rejection")?"rgba(56,189,248,.1)":"rgba(239,68,68,.1)";
                       const typeLabel= e.errorType.replace(/_/g, " ");
                       const sevColor = e.severity==="Critical"?"#ef4444":e.severity==="High"?"#f97316":e.severity==="Low"?"#10b981":"#fbbf24";
                       const isExpanded = expandedErr === e.id;
                       return (
-                        <div key={e.id} style={{borderBottom:idx<arr.length-1?`1px solid ${S.border}`:"none",background:e.resolved?"rgba(34,197,94,.03)":"transparent",opacity:e.resolved?.6:1}}>
-                          <div onClick={() => setExpandedErr(isExpanded ? null : e.id)} style={{cursor:"pointer",padding:"13px 16px",display:"flex",flexDirection:"column",gap:6}}>
-                            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                              {/* Severity Badge */}
-                              <span style={{width:8,height:8,borderRadius:"50%",background:sevColor,boxShadow:`0 0 8px ${sevColor}66`}} title={`Severity: ${e.severity||"Unknown"}`}/>
-                              {/* Type badge */}
-                              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:6,background:typeBg,color:typeColor,textTransform:"uppercase",letterSpacing:".04em"}}>{typeLabel}</span>
-                              {/* Route */}
-                              {e.route&&<span style={{fontSize:11,color:S.tx2,background:"rgba(255,255,255,.05)",padding:"1px 6px",borderRadius:4}}>{e.route}</span>}
-                              {/* User Info */}
-                              <span 
-                                onClick={(ev) => {
-                                  ev.stopPropagation();
-                                  setTab("users");
-                                  setSrch(e.email !== "unknown" && e.email !== "see uid" ? e.email : e.uid);
-                                }}
-                                style={{
-                                  fontSize: 12, color: "#fff", display: "flex", alignItems: "center", gap: 6,
-                                  background: "rgba(255,255,255,.08)", padding: "4px 10px", borderRadius: 8, 
-                                  cursor: "pointer", border: "1px solid rgba(255,255,255,.1)", fontWeight: 500
-                                }}
-                                title="Click to view user profile"
-                              >
-                                <User size={12} color="#a5b4fc" />
-                                {(() => {
-                                  const u = users.find(u => u.uid === e.uid);
-                                  const hasEmail = e.email && e.email !== "unknown" && e.email !== "see uid";
-                                  if (u) return `${u.name || "User"} (${u.email})`;
-                                  if (hasEmail) return e.email;
-                                  return (e.uid === "anonymous" || !e.uid) ? "Anonymous" : `ID: ${e.uid.slice(0, 8)}`;
-                                })()}
-                              </span>
-                              {/* Resolved */}
-                              {e.resolved&&<span style={{fontSize:10.5,color:"#4ade80",background:"rgba(34,197,94,.1)",padding:"1px 7px",borderRadius:10}}>✓ Resolved</span>}
-                              {/* Time */}
-                              <span style={{fontSize:11,color:S.tx3,marginLeft:"auto"}}>{new Date(e.timestamp).toLocaleString()}</span>
-                              {/* Resolve button */}
-                              {!e.resolved&&<button
-                                onClick={async(ev)=>{ev.stopPropagation();try{await ap({action:"resolveError",errorId:e.id});setErrorLogs(p=>p.map(x=>x.id===e.id?{...x,resolved:true}:x));st("✅ Marked resolved");}catch{st("❌ Failed");}}}
-                                style={{fontSize:10.5,padding:"2px 9px",borderRadius:6,border:"1px solid rgba(34,197,94,.3)",background:"rgba(34,197,94,.08)",color:"#4ade80",cursor:"pointer"}}
-                              ><CheckCircle size={9}/> Resolve</button>}
-                            </div>
-                            <div style={{fontSize:13,color:S.tx1,fontWeight:500,fontFamily:"JetBrains Mono, monospace"}}>{e.errorMessage}</div>
+                        <div key={e.id} style={{borderBottom:idx<arr.length-1?`1px solid ${S.border}`:"none",background:e.resolved?"rgba(34,197,94,.03)":"transparent",opacity:e.resolved?.6:1, display:"flex", alignItems:"flex-start"}}>
+                          <div style={{padding:"16px 0 0 16px"}}>
+                            <input type="checkbox" checked={selectedErrors.has(e.id)} onChange={()=>{const next=new Set(selectedErrors); if(next.has(e.id))next.delete(e.id); else next.add(e.id); setSelectedErrors(next);}} style={{width:16,height:16,cursor:"pointer"}}/>
                           </div>
+                          <div style={{flex:1}}>
+                            <div onClick={() => setExpandedErr(isExpanded ? null : e.id)} style={{cursor:"pointer",padding:"13px 16px",display:"flex",flexDirection:"column",gap:6}}>
+                              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                                <span style={{width:8,height:8,borderRadius:"50%",background:sevColor,boxShadow:`0 0 8px ${sevColor}66`}} title={`Severity: ${e.severity||"Unknown"}`}/>
+                                <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:6,background:typeBg,color:typeColor,textTransform:"uppercase",letterSpacing:".04em"}}>{typeLabel}</span>
+                                {e.route&&<span style={{fontSize:11,color:S.tx2,background:"rgba(255,255,255,.05)",padding:"1px 6px",borderRadius:4}}>{e.route}</span>}
+                                {e.email && e.email !== "unknown" && <span style={{fontSize:12,color:"#a5b4fc"}}>{e.email}</span>}
+                                {e.resolved&&<span style={{fontSize:10.5,color:"#4ade80",background:"rgba(34,197,94,.1)",padding:"1px 7px",borderRadius:10}}>✓ Resolved</span>}
+                                <span style={{fontSize:11,color:S.tx3,marginLeft:"auto"}}>{new Date(e.timestamp).toLocaleString()}</span>
+                                {!e.resolved&&<button
+                                  onClick={async(ev)=>{ev.stopPropagation();try{await ap({action:"resolveError",errorId:e.id});setErrorLogs(p=>p.map(x=>x.id===e.id?{...x,resolved:true}:x));st("✅ Marked resolved");}catch{st("❌ Failed");}}}
+                                  style={{fontSize:10.5,padding:"2px 9px",borderRadius:6,border:"1px solid rgba(34,197,94,.3)",background:"rgba(34,197,94,.08)",color:"#4ade80",cursor:"pointer"}}
+                                ><CheckCircle size={9}/> Resolve</button>}
+                                <button
+                                  onClick={async(ev)=>{ev.stopPropagation();if(!confirm("Permanently delete this error?"))return;try{await ap({action:"deleteError",errorId:e.id});setErrorLogs(p=>p.filter(x=>x.id!==e.id));st("🗑️ Error deleted");}catch{st("❌ Failed");}}}
+                                  style={{fontSize:10.5,padding:"2px 9px",borderRadius:6,border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.05)",color:"#f87171",cursor:"pointer"}}
+                                ><Trash2 size={9}/></button>
+                              </div>
+                              <div style={{fontSize:13,color:S.tx1,fontWeight:500,fontFamily:"JetBrains Mono, monospace"}}>{e.errorMessage}</div>
+                            </div>
+                          </div>
+                        </div>
                           
                           {/* Expanded Details */}
                           {isExpanded && (
@@ -1122,21 +1129,30 @@ export default function AdminPage() {
                   ) : (
                     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
                       {inspectedHistory.length === 0 ? (
-                        <div style={{ padding:40, textAlign:"center", color:S.tx3 }}>No history items to display.</div>
+                        <div style={{ padding:40, textAlign:"center", color:S.tx3 }}>No history items to display. Activity recorded after the latest update will appear here.</div>
                       ) : (
                         inspectedHistory.map((h, i) => (
                           <div key={h.id || i} style={{ padding:16, background:"rgba(255,255,255,.02)", border:`1px solid ${S.border}`, borderRadius:12 }}>
                             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
                               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                                <span style={{ fontSize:11, fontWeight:700, background:"rgba(99,102,241,.1)", color:"#818cf8", padding:"2px 8px", borderRadius:6, textTransform:"uppercase" }}>{h.category}</span>
-                                <span style={{ fontSize:12, color:S.tx3 }}>{new Date(h.timestamp).toLocaleString()}</span>
+                                <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:6, background:"rgba(99,102,241,.1)", color:"#818cf8", textTransform:"uppercase" }}>{h.category || "General"}</span>
+                                <span style={{ fontSize:11, color:S.tx3 }}>{new Date(h.timestamp || 0).toLocaleString()}</span>
+                                {h.specialist && <span style={{ fontSize:11, color:"#fbbf24", background:"rgba(245,158,11,.1)", padding:"1px 6px", borderRadius:4 }}>{h.specialist} agent</span>}
                               </div>
-                              <code style={{ fontSize:11, color:S.tx3 }}>{h.id?.slice(0,8)}</code>
+                              <div style={{ fontSize:11, color:S.tx3 }}>ID: <code style={{ color:S.tx2 }}>{String(h.id).slice(0,8)}</code></div>
                             </div>
-                            <div style={{ fontSize:14, color:"#fff", fontWeight:600, marginBottom:8 }}>Q: {h.originalIdea}</div>
-                            <div style={{ fontSize:13, color:S.tx2, background:"rgba(0,0,0,.2)", padding:12, borderRadius:8, fontFamily:"monospace", border:`1px solid ${S.border}` }}>
-                              {h.engineeredPrompt?.slice(0, 400)}{h.engineeredPrompt?.length > 400 && "..."}
+                            <div style={{ fontSize:13.5, fontWeight:600, color: "#fff", marginBottom:6 }}>{h.title || "Untitled Interaction"}</div>
+                            <div style={{ fontSize:12.5, color:S.tx2, background:"rgba(0,0,0,.3)", padding:10, borderRadius:8, fontFamily:"var(--font-mono)", whiteSpace:"pre-wrap", border:`1px solid ${S.border}` }}>
+                              {h.originalIdea}
                             </div>
+                            {h.engineeredPrompt && (
+                              <div style={{ marginTop:12 }}>
+                                <div style={{ fontSize:10, fontWeight:700, color:S.tx3, marginBottom:4 }}>ENGINEERED OUTPUT</div>
+                                <div style={{ fontSize:12, color:"#4ade80", background:"rgba(34,197,94,.05)", padding:10, borderRadius:8, border:"1px dashed rgba(34,197,94,.2)" }}>
+                                  {h.engineeredPrompt}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))
                       )}

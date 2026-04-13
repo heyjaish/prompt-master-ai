@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const DEFAULT_MODEL = "gemini-1.5-flash";
+const DEFAULT_MODEL = "gemini-3-flash-preview";
 
 function getAllApiKeys(): string[] {
   const keys: string[] = [];
@@ -51,19 +51,20 @@ export async function POST(req: NextRequest) {
       ${keywordsContext}
 
       TASK:
-      Generate two lists of short strings (3-6 words each) that would be helpful for this user.
+      Generate two lists of short strings (3-6 words each).
       
-      SECTION 1: AI SUGGESTIONS (High-level quick actions, persona-driven, or goal-oriented)
+      CRITICAL RULE: suggestions MUST BE tailored to the ACTIVE SPECIALIST.
+      - If Image Specialist: suggestions like "Cinematic lighting", "8k hyperrealistic", "Portrait shot", "Macro photography".
+      - If Code Specialist: suggestions like "Refactor function", "Explain logic", "Write unit test", "Fix bug", "TypeScript conversion".
+      - If Business Specialist: suggestions like "Marketing plan", "Competitor analysis", "Elevator pitch", "Revenue model".
+
+      SECTION 1: AI SUGGESTIONS (Immediate high-level goals/actions)
       - Provide 8 items.
-      - Make them highly relevant to the active specialist if one exists.
-      - If user is "Code" focused, suggestions should be about features, bugs, or architecture.
-      - If user is "Image" focused, suggestions should be about styles, lighting, or specific compositions.
       
-      SECTION 2: SMART TIPS (Technical insertions, advanced parameters, or quality boosters)
+      SECTION 2: SMART TIPS (Technical modifiers or parameter additions)
       - Provide 12 items.
-      - These should be modular "insertions" like "TypeScript strict", "Cinematic lighting", "Marketing hook", etc.
       
-      RETURN ONLY JSON in this format:
+      RETURN ONLY JSON:
       {
         "suggestions": ["...", "..."],
         "tips": ["...", "..."]

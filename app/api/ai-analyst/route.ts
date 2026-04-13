@@ -15,11 +15,7 @@ function getAllApiKeys(): string[] {
   return keys;
 }
 
-const MODELS_TO_TRY = [
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-2.0-flash-lite-preview-02-05", // Example of a newer model in 2026
-];
+const MODELS_TO_TRY = ["gemini-3-flash-preview"];
 
 async function generateWithRetry(prompt: string): Promise<string> {
   const keys = getAllApiKeys();
