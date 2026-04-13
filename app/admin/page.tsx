@@ -937,7 +937,16 @@ export default function AdminPage() {
                   <span style={{fontSize:13,fontWeight:600,color:S.tx1}}>Recent Errors</span>
                 </div>
 
-                <div style={{overflowY:"auto",maxHeight:520}}>
+                {errLogsLoading ? (
+                  <div style={{padding:"32px",textAlign:"center",color:S.tx3,fontSize:13}}>⏳ Loading errors…</div>
+                ) : errorLogs.length === 0 ? (
+                  <div style={{padding:"40px",textAlign:"center"}}>
+                    <div style={{fontSize:36,marginBottom:10}}>✅</div>
+                    <div style={{fontSize:14,fontWeight:600,color:S.tx1,marginBottom:6}}>No errors logged</div>
+                    <div style={{fontSize:12.5,color:S.tx3}}>Click Refresh to load — errors appear here automatically when users hit issues.</div>
+                  </div>
+                ) : (
+                  <div style={{overflowY:"auto",maxHeight:520}}>
                     {errorLogs.filter(e => {
                       // Apply search filter
                       if (errSearch) {
