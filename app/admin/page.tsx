@@ -7,7 +7,7 @@ import {
   ArrowLeft, Shield, Search, RefreshCw, Save, Ban, UserCheck,
   Crown, TrendingUp, Activity, AlertTriangle, Download, Megaphone,
   Bot, ChevronDown, ChevronUp, Trash2, CheckSquare, Square,
-  BarChart2, Zap, Lock, Unlock, Globe, Bell, AlertCircle, CheckCircle, XCircle,
+  BarChart2, Zap, Lock, Unlock, Globe, Bell, AlertCircle, CheckCircle, XCircle, User,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -927,8 +927,26 @@ export default function AdminPage() {
                               <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:6,background:typeBg,color:typeColor,textTransform:"uppercase",letterSpacing:".04em"}}>{typeLabel}</span>
                               {/* Route */}
                               {e.route&&<span style={{fontSize:11,color:S.tx2,background:"rgba(255,255,255,.05)",padding:"1px 6px",borderRadius:4}}>{e.route}</span>}
-                              {/* UID */}
-                              <span style={{fontSize:11,color:S.tx3,fontFamily:"monospace"}} title={e.email}>{e.uid?.slice(0,8)}…</span>
+                              {/* User Info */}
+                              <span 
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  setTab("users");
+                                  setSearch(e.email !== "unknown" && e.email !== "see uid" ? e.email : e.uid);
+                                }}
+                                style={{
+                                  fontSize: 11.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5,
+                                  background: "rgba(255,255,255,.03)", padding: "2px 8px", borderRadius: 6, cursor: "pointer"
+                                }}
+                                title="Click to view user"
+                              >
+                                <User size={10} />
+                                {(() => {
+                                  const foundUser = allUsers.find(u => u.uid === e.uid);
+                                  const email = e.email !== "unknown" && e.email !== "see uid" ? e.email : (foundUser?.email || e.uid?.slice(0, 10) + "…");
+                                  return email;
+                                })()}
+                              </span>
                               {/* Resolved */}
                               {e.resolved&&<span style={{fontSize:10.5,color:"#4ade80",background:"rgba(34,197,94,.1)",padding:"1px 7px",borderRadius:10}}>✓ Resolved</span>}
                               {/* Time */}
