@@ -63,6 +63,7 @@ export default function Sidebar({ history, onSelectHistory, onNewChat, onDeleteH
       {/* New prompt */}
       <div style={{ padding: "10px 10px 6px", flexShrink: 0 }}>
         <button
+          type="button"
           onClick={onNewChat}
           className="sidebar-new-btn"
           style={{ justifyContent: collapsed ? "center" : "flex-start" }}

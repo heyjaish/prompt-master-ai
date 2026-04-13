@@ -177,6 +177,8 @@ export default function AdminPage() {
 
   useEffect(()=>{if(!loading&&!user){router.replace("/login");return;} if(!loading&&user&&isAdmin&&pwOk)load();},[user,loading,isAdmin,pwOk,load,router]);
 
+  useEffect(() => { if (tab === "errors") loadErrors(); }, [tab, loadErrors]);
+
   // ── Guards ────────────────────────────────────────────────────
   if(loading) return <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg)"}}><div style={{width:36,height:36,borderRadius:"50%",border:"3px solid #6366f1",borderTopColor:"transparent",animation:"spin 1s linear infinite"}}/></div>;
   if(!user) return null;

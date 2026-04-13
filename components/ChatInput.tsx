@@ -12,11 +12,12 @@ interface Props {
   onClearInitial?: () => void;
   appendText?: string;
   onClearAppend?: () => void;
+  disableImage?: boolean;
 }
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
-export default function ChatInput({ onSend, isLoading, initialValue = "", onClearInitial, appendText, onClearAppend }: Props) {
+export default function ChatInput({ onSend, isLoading, initialValue = "", onClearInitial, appendText, onClearAppend, disableImage }: Props) {
   const [value, setValue] = useState("");
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [drag, setDrag] = useState(false);
@@ -108,11 +109,15 @@ export default function ChatInput({ onSend, isLoading, initialValue = "", onClea
           rows={1}
         />
         <div className="input-toolbar">
-          <button className="icon-btn" onClick={() => fileRef.current?.click()} disabled={images.length >= 4} title="Attach image">
-            <Paperclip size={15} />
-          </button>
-          <input ref={fileRef} type="file" accept={ACCEPTED.join(",")} multiple style={{ display: "none" }}
-            onChange={e => { if (e.target.files) { addFiles(e.target.files); e.target.value = ""; } }} />
+          {!disableImage && (
+            <>
+              <button className="icon-btn" onClick={() => fileRef.current?.click()} disabled={images.length >= 4} title="Attach image">
+                <Paperclip size={15} />
+              </button>
+              <input ref={fileRef} type="file" accept={ACCEPTED.join(",")} multiple style={{ display: "none" }}
+                onChange={e => { if (e.target.files) { addFiles(e.target.files); e.target.value = ""; } }} />
+            </>
+          )}
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
             <span style={{ fontSize: 11.5, color: "var(--tx-3)" }}>
               <kbd>Ctrl</kbd>+<kbd>↵</kbd>

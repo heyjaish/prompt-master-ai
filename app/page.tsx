@@ -37,18 +37,31 @@ export default function HomePage() {
   const [chipsRefresh, setChipsRefresh]     = useState(0);
   const [learnedKeywords, setLearnedKws]    = useState<string[]>([]);
   const [announcement, setAnnouncement]     = useState<{ enabled:boolean; title:string; message:string; type:string } | null>(null);
+  const [features, setFeatures]             = useState<{ splitView:boolean; history:boolean; imageUpload:boolean }>({ splitView:true, history:true, imageUpload:true });
   const [inputCollapsed, setInputCollapsed] = useState(false);
   const [chipsCollapsed, setChipsCollapsed] = useState(false); // bottom keyword panel
-  const chipsIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-hide chips panel after 15s idle
-  const resetChipsTimer = () => {
-    if (chipsIdleTimer.current) clearTimeout(chipsIdleTimer.current);
-    setChipsCollapsed(false);
-    chipsIdleTimer.current = setTimeout(() => setChipsCollapsed(true), 15000);
+  // Auto-hide entire input panel after 15s idle
+  const resetInputTimer = () => {
+    if (inputIdleTimer.current) clearTimeout(inputIdleTimer.current);
+    inputIdleTimer.current = setTimeout(() => {
+      // Only auto-collapse if we are not actively loading/generating
+      if (!isLoading) setInputCollapsed(true);
+    }, 15000);
   };
-  useEffect(() => () => { if (chipsIdleTimer.current) clearTimeout(chipsIdleTimer.current); }, []);
+  useEffect(() => {
+    const handleGlobalInteraction = () => resetInputTimer();
+    window.addEventListener("mousemove", handleGlobalInteraction);
+    window.addEventListener("keydown", handleGlobalInteraction);
+    resetInputTimer();
+    return () => {
+      window.removeEventListener("mousemove", handleGlobalInteraction);
+      window.removeEventListener("keydown", handleGlobalInteraction);
+      if (inputIdleTimer.current) clearTimeout(inputIdleTimer.current);
+    };
+  }, [isLoading]);
 
   // ── Restore view preference ─────────────────────────────────
   useEffect(() => {
@@ -84,10 +97,11 @@ export default function HomePage() {
     ).catch(() => {});
   }, [user, activeSpecialist, chipsRefresh]);
 
-  // ── Announcement ─────────────────────────────────────────
+  // ── Global Config & Announcement ─────────────────────────
   useEffect(() => {
     fetch("/api/public-config").then(r => r.json()).then(d => {
       if (d.announcement?.enabled) setAnnouncement(d.announcement);
+      if (d.features) setFeatures({ splitView: d.features.splitView??true, history: d.features.history??true, imageUpload: d.features.imageUpload??true });
     }).catch(() => {});
   }, []);
 
@@ -194,7 +208,11 @@ export default function HomePage() {
   };
 
   const handleNewChat = () => {
-    setMessages([]); setSelectedId(undefined); setLatestPrompt(null); setInputCollapsed(false);
+    setMessages([]); 
+    setSelectedId(undefined); 
+    setLatestPrompt(null); 
+    setInputCollapsed(false);
+    setAppendText("");
   };
 
   const handleInsert = (text: string) => {
@@ -216,17 +234,19 @@ export default function HomePage() {
   return (
     <AuthGuard>
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--bg)" }}>
-      <Sidebar
-        history={history}
-        selectedId={selectedId}
-        onSelectHistory={handleSelectHistory}
-        onNewChat={handleNewChat}
-        onDeleteHistory={id => {
-          if (user) deletePrompt(user.uid, id).catch(() => {});
-          setHistory(p => p.filter(e => e.id !== id));
-          if (selectedId === id) handleNewChat();
-        }}
-      />
+      {features.history && (
+        <Sidebar
+          history={history}
+          selectedId={selectedId}
+          onSelectHistory={handleSelectHistory}
+          onNewChat={handleNewChat}
+          onDeleteHistory={id => {
+            if (user) deletePrompt(user.uid, id).catch(() => {});
+            setHistory(p => p.filter(e => e.id !== id));
+            if (selectedId === id) handleNewChat();
+          }}
+        />
+      )}
 
       {/* Main content */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
@@ -243,8 +263,8 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* View toggle — user-controlled only */}
-        {latestPrompt && (
+        {/* View toggle — user-controlled only (if feature enabled) */}
+        {latestPrompt && features.splitView && (
           <div style={{ display: "flex", alignItems: "center", padding: "5px 16px", borderBottom: "1px solid var(--border)", background: "rgba(17,17,22,0.8)", backdropFilter: "blur(12px)", flexShrink: 0 }}>
             <div className="view-tabs">
               {(["chat", "split"] as ViewMode[]).map(m => (
@@ -328,10 +348,22 @@ export default function HomePage() {
                   </button>
                 ) : (
                   <>
-                    {/* Module Keywords — collapsible + auto-hide */}
+                    {/* Module Keywords — collapsible */}
                     {user && (
-                      <div onMouseMove={resetChipsTimer} onClick={resetChipsTimer}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 2 }}>
+                      <div style={{ position: "relative" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+                          {/* Left: Overall Minimize Panel Arrow */}
+                          <button
+                            onClick={() => setInputCollapsed(true)}
+                            title="Minimize input panel"
+                            style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(234,179,8,.15)", color: "#eab308", border: "1px solid rgba(234,179,8,.3)", borderRadius: 6, cursor: "pointer", transition: "all .15s" }}
+                            onMouseEnter={e => { e.currentTarget.style.background = "rgba(234,179,8,.25)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "rgba(234,179,8,.15)"; }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                          </button>
+
+                          {/* Right: Hide Chips Toggle */}
                           <button
                             onClick={() => setChipsCollapsed(c => !c)}
                             style={{ fontSize: 10.5, color: "var(--tx-3)", background: "none", border: "none", cursor: "pointer", padding: "1px 6px", opacity: .6 }}
@@ -352,12 +384,14 @@ export default function HomePage() {
                     )}
 
                     <ChatInput
+                      key={selectedId ?? "new_chat_key"}
                       onSend={handleSend}
                       isLoading={isLoading}
                       appendText={appendText}
                       onClearAppend={() => setAppendText("")}
                       initialValue={""}
                       onClearInitial={() => {}}
+                      disableImage={!features.imageUpload}
                     />
 
                     {/* Specialist indicator */}

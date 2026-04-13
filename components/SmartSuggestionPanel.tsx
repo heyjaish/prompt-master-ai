@@ -59,13 +59,39 @@ function detectDomain(specialist: Specialist | null): string {
 export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, onInsert }: Props) {
   const [open, setOpen] = useState(true);
   const [clicked, setClicked] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("pm_panel_favorites");
+      if (stored) setFavorites(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  const toggleFavorite = (text: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const domain = detectDomain(activeSpecialist);
+    const domainFavs = favorites[domain] || [];
+    const newDomainFavs = domainFavs.includes(text)
+      ? domainFavs.filter(k => k !== text)
+      : [...domainFavs, text];
+    
+    const newFavorites = { ...favorites, [domain]: newDomainFavs };
+    setFavorites(newFavorites);
+    localStorage.setItem("pm_panel_favorites", JSON.stringify(newFavorites));
+  };
 
   const domain = detectDomain(activeSpecialist);
   const domainSuggestions = DOMAIN_SUGGESTIONS[domain] ?? DOMAIN_SUGGESTIONS.general;
 
-  // Merge user keywords (top 4) with domain suggestions, deduplicate
-  const userTop = userKeywords.slice(0, 4).filter(k => !domainSuggestions.some(d => d.toLowerCase() === k.toLowerCase()));
-  const allSuggestions = [...userTop, ...domainSuggestions].slice(0, 16);
+  const domainFavs = favorites[domain] || [];
+  
+  // Merge user keywords, favorites, and domain suggestions
+  const userTop = userKeywords.slice(0, 4).filter(k => !domainFavs.includes(k) && !domainSuggestions.some(d => d.toLowerCase() === k.toLowerCase()));
+  const favList = domainFavs.filter(k => !domainSuggestions.some(d => d.toLowerCase() === k.toLowerCase()));
+  
+  // Create final list, putting favs at the top of domain suggestions
+  const finalDomainSuggestions = Array.from(new Set([...domainFavs, ...domainSuggestions])).slice(0, 20);
 
   const handleClick = (text: string) => {
     onInsert(text);
@@ -141,11 +167,18 @@ export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, o
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 5, display: "flex", alignItems: "center", gap: 4 }}>
             <Zap size={8} color="#8b5cf6"/> {domainLabel[domain]} Tips
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 3, overflowY: "auto", flex: 1, scrollbarWidth: "none" }}>
-            {domainSuggestions.slice(0, 12).map(kw => (
-              <Chip key={kw} text={kw} active={clicked === kw} onClick={() => handleClick(kw)} accent="#8b5cf6"/>
+          <div className="panel-scroll" style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", flex: 1, paddingRight: 4 }}>
+            {finalDomainSuggestions.map(kw => (
+              <Chip key={kw} text={kw} active={clicked === kw} isFav={domainFavs.includes(kw)} onToggleFav={(e) => toggleFavorite(kw, e)} onClick={() => handleClick(kw)} accent="#8b5cf6"/>
             ))}
           </div>
+
+          <style>{`
+            .panel-scroll::-webkit-scrollbar { width: 4px; }
+            .panel-scroll::-webkit-scrollbar-track { background: transparent; }
+            .panel-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+            .panel-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+          `}</style>
 
           {/* Footer */}
           <div style={{ marginTop: 8, fontSize: 9.5, color: "rgba(255,255,255,.2)", textAlign: "center", flexShrink: 0 }}>
@@ -157,23 +190,45 @@ export default function SmartSuggestionPanel({ activeSpecialist, userKeywords, o
   );
 }
 
-function Chip({ text, active, onClick, accent }: { text: string; active: boolean; onClick: () => void; accent: string }) {
+function Chip({ text, active, isFav, onToggleFav, onClick, accent }: { text: string; active: boolean; isFav?: boolean; onToggleFav?: (e: React.MouseEvent) => void; onClick: () => void; accent: string }) {
+  const [hover, setHover] = useState(false);
   return (
-    <button
-      onClick={onClick}
-      style={{
-        width: "100%", textAlign: "left", padding: "5px 9px",
-        borderRadius: 8, border: `1px solid ${active ? accent + "66" : "rgba(255,255,255,.07)"}`,
-        background: active ? `${accent}22` : "rgba(255,255,255,.03)",
-        color: active ? "#c4b5fd" : "rgba(255,255,255,.55)",
-        fontSize: 11.5, cursor: "pointer", transition: "all .12s",
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = `${accent}18`; e.currentTarget.style.color = "#e2e8f0"; e.currentTarget.style.borderColor = `${accent}44`; }}
-      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "rgba(255,255,255,.03)"; e.currentTarget.style.color = "rgba(255,255,255,.55)"; e.currentTarget.style.borderColor = "rgba(255,255,255,.07)"; } }}
-      title={`Insert: "${text}"`}
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ position: "relative", flexShrink: 0 }}
     >
-      {text}
-    </button>
+      <button
+        onClick={onClick}
+        style={{
+          width: "100%", textAlign: "left", padding: "6px 24px 6px 9px",
+          borderRadius: 8, border: `1px solid ${active ? accent + "66" : "rgba(255,255,255,.07)"}`,
+          background: active ? `${accent}22` : hover ? `${accent}18` : "rgba(255,255,255,.03)",
+          color: active ? "#c4b5fd" : hover ? "#e2e8f0" : "rgba(255,255,255,.55)",
+          fontSize: 11.5, cursor: "pointer", transition: "all .12s",
+          whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3,
+          minHeight: 28, display: "flex", alignItems: "center"
+        }}
+        title={`Insert: "${text}"`}
+      >
+        {text}
+      </button>
+      
+      {onToggleFav && (isFav || hover || active) && (
+        <button
+          onClick={onToggleFav}
+          style={{
+            position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+            background: "none", border: "none", cursor: "pointer",
+            color: isFav ? "#fbbf24" : "rgba(255,255,255,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 2, borderRadius: 4, transition: "color 0.2s"
+          }}
+          title={isFav ? "Remove from favorites" : "Add to favorites"}
+        >
+          {isFav ? "★" : "☆"}
+        </button>
+      )}
+    </div>
   );
 }
