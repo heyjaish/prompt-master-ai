@@ -22,11 +22,11 @@ DO NOT INCLUDE:
 - Explanatory sections or "Why this works:" commentary
 - Multiple separate sections or bullet lists explaining the prompt structure`;
 
-const DEFAULT_MODEL   = "gemini-2.5-flash-preview-04-17"; // user's primary model
+const DEFAULT_MODEL   = "gemini-3-flash-preview"; // user's primary model
 const FALLBACK_MODELS = [
-  "gemini-2.5-flash-preview-04-17",  // primary
-  "gemini-2.0-flash-lite",           // lighter fallback
-  "gemini-1.5-flash",                // most stable backup
+  "gemini-3-flash-preview",  // primary
+  "gemini-3-flash-preview",           // lighter fallback
+  "gemini-3-flash-preview",                // most stable backup
 ];
 const ADMIN_KEY = process.env.ADMIN_SECRET_KEY ?? "admin-secret-2025";
 
