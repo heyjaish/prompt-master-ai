@@ -37,7 +37,7 @@ export default function ErrorTracker() {
 
     const handlePromiseRejection = (event: PromiseRejectionEvent) => {
       const msg = event.reason instanceof Error ? event.reason.message : String(event.reason);
-      const stack = event.reason instanceof Error ? event.reason.stack : null;
+      const stack = event.reason instanceof Error ? (event.reason.stack || null) : null;
       logError("unhandled_rejection", msg, stack);
     };
 
@@ -67,7 +67,7 @@ export default function ErrorTracker() {
       } catch (err) {
         if (!url.includes("/api/admin")) {
           const msg = err instanceof Error ? err.message : String(err);
-          const stack = err instanceof Error ? err.stack : null;
+          const stack = err instanceof Error ? (err.stack || null) : null;
           logError(msg.includes("timeout") ? "timeout" : "api_error", `Endpoint: ${url}\nNetwork Error: ${msg}`, stack);
         }
         throw err;
