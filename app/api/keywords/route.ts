@@ -36,7 +36,11 @@ export async function GET(req: NextRequest) {
       lastSeen: (d.data().lastSeen as number) || 0,
     }));
     return NextResponse.json({ keywords });
-  } catch {
+  } catch (e) {
+    try {
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({ errorType: "api_error", errorMessage: String(e), severity: "Low", userAction: "Fetch Keywords", route: "/api/keywords", uid: uid || "unknown" });
+    } catch {}
     return NextResponse.json({ keywords: [] });
   }
 }
@@ -69,7 +73,11 @@ export async function POST(req: NextRequest) {
       })
     );
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) {
+    try {
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({ errorType: "api_error", errorMessage: String(e), severity: "Low", userAction: "Store Keywords", route: "/api/keywords", uid: uid || "unknown" });
+    } catch {}
     return NextResponse.json({ ok: true }); // never fail UI
   }
 }

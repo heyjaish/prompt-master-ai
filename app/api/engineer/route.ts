@@ -255,28 +255,23 @@ export async function POST(req: NextRequest) {
     }
     // ── Auto-log error to admin error monitor ─────────────────
     try {
-      const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-      // We must await this, or Vercel kills the unawaited fetch immediately when returning
-      await fetch(`${base}/api/admin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_KEY },
-        body: JSON.stringify({
-          action: "logError",
-          uid:          body?.uid ?? "anonymous",
-          email:        "see uid",
-          errorType:    err instanceof Error && (err.message.startsWith("ALL_KEYS") || err.message.startsWith("ALL_MODELS")) ? "quota_exhausted"
-                      : isQuotaError(err) ? "rate_limit"
-                      : err instanceof Error && (err.message.includes("403") || err.message.includes("401")) ? "invalid_key"
-                      : "api_error",
-          errorMessage: message,
-          severity:     err instanceof Error && err.message.startsWith("ALL_MODELS") ? "Critical" : isQuotaError(err) ? "High" : "Medium",
-          stack:        err instanceof Error ? err.stack : null,
-          userAction:   "AI Generate Prompt",
-          specialist:   body?.specialistName ?? null,
-          modelUsed:    modelName ?? null,
-        }),
-      }).catch(e => console.error("Error logging failed:", e));
-    } catch { /* never block UI for logging */ }
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({
+        uid:          body?.uid ?? "anonymous",
+        email:        "see uid",
+        errorType:    err instanceof Error && (err.message.startsWith("ALL_KEYS") || err.message.startsWith("ALL_MODELS")) ? "quota_exhausted"
+                    : isQuotaError(err) ? "rate_limit"
+                    : err instanceof Error && (err.message.includes("403") || err.message.includes("401")) ? "invalid_key"
+                    : "api_error",
+        errorMessage: message,
+        severity:     err instanceof Error && err.message.startsWith("ALL_MODELS") ? "Critical" : isQuotaError(err) ? "High" : "Medium",
+        stack:        err instanceof Error ? (err.stack ?? null) : null,
+        userAction:   "AI Generate Prompt",
+        route:        "/api/engineer",
+        specialist:   body?.specialistName ?? null,
+        modelUsed:    modelName ?? null,
+      });
+    } catch { /* never block UI */ }
 
     return NextResponse.json({
       error: message,

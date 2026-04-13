@@ -30,7 +30,11 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) {
+    try {
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({ errorType: "api_error", errorMessage: String(e), severity: "Low", userAction: "Track Event", route: "/api/analytics" });
+    } catch {}
     return NextResponse.json({ ok: true }); // always 200
   }
 }
@@ -74,6 +78,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ summary, byEvent, byHour, uniqueUsers, eventCount: recent.length });
   } catch (e) {
+    try {
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({ errorType: "api_error", errorMessage: String(e), severity: "Medium", userAction: "Fetch Analytics", route: "/api/analytics" });
+    } catch {}
     return NextResponse.json({ summary: {}, byEvent: {}, byHour: {}, uniqueUsers: 0, eventCount: 0 });
   }
 }

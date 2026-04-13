@@ -151,6 +151,7 @@ export default function AdminPage() {
   const [errorLogs, setErrorLogs]             = useState<ErrorLog[]>([]);
   const [errLogsLoading, setErrLogsLoading]   = useState(false);
   const [errFilter, setErrFilter]             = useState<"all"|"today"|"7d"|"unresolved"|"quota"|"frontend"|string>("all");
+  const [errSearch, setErrSearch]             = useState("");
   const [expandedErr, setExpandedErr]         = useState<string|null>(null);
 
   const isAdmin = useMemo(()=>user?.email?.toLowerCase()===ADMIN_EMAIL.toLowerCase(),[user]);
@@ -844,13 +845,14 @@ export default function AdminPage() {
               </div>
 
               {/* Stats Summary */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12}}>
                 {[
                   {label:"Total Errors",val:errorLogs.length,color:"#f87171"},
                   {label:"Unresolved",val:errorLogs.filter(e=>!e.resolved).length,color:"#fbbf24"},
                   {label:"Quota / Limits",val:errorLogs.filter(e=>e.errorType==="quota_exhausted"||e.errorType==="rate_limit").length,color:"#f59e0b"},
                   {label:"API Failures",val:errorLogs.filter(e=>e.errorType==="api_error"||e.errorType==="invalid_key").length,color:"#a78bfa"},
                   {label:"UI / Crashes",val:errorLogs.filter(e=>e.errorType==="frontend_crash"||e.errorType==="unhandled_rejection").length,color:"#38bdf8"},
+                  {label:"Last 24h",val:errorLogs.filter(e=>e.timestamp > Date.now() - 86400000).length,color:"#4ade80"},
                 ].map(({label,val,color})=>(
                   <div key={label} style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:12,padding:"14px 16px"}}>
                     <div style={{fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:S.tx3,marginBottom:6}}>{label}</div>
@@ -860,13 +862,20 @@ export default function AdminPage() {
               </div>
 
               {/* Filters */}
-              <div style={{display:"flex",gap:8,alignItems:"center",paddingBottom:4}}>
-                <span style={{fontSize:12,color:S.tx3,flexShrink:0}}>Filter Logs:</span>
-                {(["all", "today", "7d", "unresolved", "quota", "api", "frontend"] as const).map(f=>(
-                  <button key={f} onClick={()=>setErrFilter(f)} style={{fontSize:11.5,padding:"4px 10px",borderRadius:6,border:errFilter===f?`1px solid #6366f1`:`1px solid ${S.border}`,background:errFilter===f?"rgba(99,102,241,.15)":"transparent",color:errFilter===f?"#a5b4fc":S.tx3,cursor:"pointer",textTransform:"capitalize"}}>
-                    {f}
-                  </button>
-                ))}
+              <div style={{display:"flex",gap:12,alignItems:"center",paddingBottom:4,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:12,color:S.tx3,flexShrink:0}}>Filter:</span>
+                  {(["all", "today", "7d", "unresolved", "quota", "api", "frontend"] as const).map(f=>(
+                    <button key={f} onClick={()=>setErrFilter(f)} style={{fontSize:11.5,padding:"4px 10px",borderRadius:6,border:errFilter===f?`1px solid #6366f1`:`1px solid ${S.border}`,background:errFilter===f?"rgba(99,102,241,.15)":"transparent",color:errFilter===f?"#a5b4fc":S.tx3,cursor:"pointer",textTransform:"capitalize"}}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+                <div style={{flex:1,minWidth:250,position:"relative"}}>
+                  <Search size={12} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:S.tx3}}/>
+                  <input value={errSearch} onChange={e=>setErrSearch(e.target.value)} placeholder="Search by User UID or Email…"
+                    style={{width:"100%",background:"rgba(255,255,255,.04)",border:`1px solid ${S.border}`,borderRadius:10,color:S.tx1,fontSize:12.5,padding:"8px 12px 8px 30px",outline:"none"}}/>
+                </div>
               </div>
 
               {/* Error Log Table */}
@@ -888,10 +897,17 @@ export default function AdminPage() {
                 ) : (
                   <div style={{overflowY:"auto",maxHeight:520}}>
                     {errorLogs.filter(e => {
+                      // Apply search filter
+                      if (errSearch) {
+                        const searchArr = errSearch.toLowerCase();
+                        const matches = e.uid?.toLowerCase().includes(searchArr) || e.email?.toLowerCase().includes(searchArr) || e.errorMessage?.toLowerCase().includes(searchArr);
+                        if (!matches) return false;
+                      }
+                      
                       if(errFilter==="unresolved") return !e.resolved;
                       if(errFilter==="quota") return e.errorType.includes("quota")||e.errorType.includes("limit");
-                      if(errFilter==="frontend") return e.errorType.includes("frontend")||e.errorType.includes("unhandled");
-                      if(errFilter==="api") return e.errorType==="api_error" || e.errorType==="invalid_key";
+                      if(errFilter==="frontend") return e.errorType.includes("frontend")||e.errorType.includes("unhandled")||e.errorType.includes("boundary");
+                      if(errFilter==="api") return e.errorType==="api_error" || e.errorType==="invalid_key" || e.errorType==="timeout";
                       if(errFilter==="today") return new Date(e.timestamp).toISOString().slice(0,10) === new Date().toISOString().slice(0,10);
                       if(errFilter==="7d") return e.timestamp > Date.now() - 7*86400000;
                       return true;

@@ -98,6 +98,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ insights, data, generatedAt: Date.now() });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    try {
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({
+        errorType: msg.toLowerCase().includes("quota") ? "quota_exhausted" : "api_error",
+        errorMessage: msg,
+        severity: msg.toLowerCase().includes("quota") ? "High" : "Medium",
+        userAction: "Generate AI Insights",
+        route: "/api/ai-analyst",
+        stack: e instanceof Error ? e.stack : null
+      });
+    } catch {}
     return NextResponse.json({ error: msg.slice(0, 400) }, { status: 500 });
   }
 }

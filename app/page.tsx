@@ -95,7 +95,9 @@ export default function HomePage() {
       : `/api/keywords?uid=${user.uid}`;
     fetch(url).then(r => r.json()).then(({ keywords: kws }) =>
       setLearnedKws((kws ?? []).map((k: { word: string }) => k.word))
-    ).catch(() => {});
+    ).catch((err) => {
+      logFrontendError({ uid: user?.uid, email: user?.email ?? "unknown", errorType: "api_error", errorMessage: err instanceof Error ? err.message : String(err), userAction: "Load Keywords", severity: "Low" });
+    });
   }, [user, activeSpecialist, chipsRefresh]);
 
   // ── Global Config & Announcement ─────────────────────────
@@ -172,7 +174,11 @@ export default function HomePage() {
         specialist: activeSpecialist?.slotId,
       };
       if (user) {
-        savePrompt(user.uid, entry).catch(err => console.error("Save failed:", err));
+        savePrompt(user.uid, entry).catch(err => {
+          console.error("Save failed:", err);
+          toast.error("Failed to save history");
+          logFrontendError({ uid: user.uid, email: user.email ?? "unknown", errorType: "save_failed", errorMessage: err instanceof Error ? err.message : String(err), severity: "Medium", userAction: "Save Prompt" });
+        });
         setHistory(prev => [entry, ...prev.filter(e => e.id !== entry.id)]);
 
         const keywords = extractKeywords(engineeredPrompt + " " + idea);
@@ -181,7 +187,9 @@ export default function HomePage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ uid: user.uid, keywords, specialistId: activeSpecialist?.slotId }),
-          }).catch(() => {});
+          }).catch(err => {
+            logFrontendError({ uid: user.uid, email: user.email ?? "unknown", errorType: "api_error", errorMessage: err instanceof Error ? err.message : String(err), severity: "Low", userAction: "Save Keywords" });
+          });
           setChipsRefresh(n => n + 1);
         }
       }
@@ -248,7 +256,10 @@ export default function HomePage() {
           onSelectHistory={handleSelectHistory}
           onNewChat={handleNewChat}
           onDeleteHistory={id => {
-            if (user) deletePrompt(user.uid, id).catch(() => {});
+            if (user) deletePrompt(user.uid, id).catch(err => {
+              toast.error("Failed to delete chat");
+              logFrontendError({ uid: user.uid, email: user.email ?? "unknown", errorType: "delete_failed", errorMessage: err instanceof Error ? err.message : String(err), severity: "Low", userAction: "Delete Chat" });
+            });
             setHistory(p => p.filter(e => e.id !== id));
             if (selectedId === id) handleNewChat();
           }}

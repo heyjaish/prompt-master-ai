@@ -97,8 +97,13 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     console.error("[SSO Exchange] Internal error:", err);
+    const msg = err instanceof Error ? err.message : "unknown";
+    try {
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({ errorType: "api_error", errorMessage: msg, severity: "High", userAction: "SSO Exchange", route: "/api/sso-exchange", stack: err instanceof Error ? err.stack : null });
+    } catch {}
     return NextResponse.json(
-      { error: `Internal server error: ${err instanceof Error ? err.message : "unknown"}` },
+      { error: `Internal server error: ${msg}` },
       { status: 500 }
     );
   }

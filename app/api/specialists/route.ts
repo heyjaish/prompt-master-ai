@@ -23,6 +23,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ specialists });
   } catch (e) {
     console.error("specialists GET error:", e);
+    try {
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({ errorType: "api_error", errorMessage: String(e), severity: "Medium", userAction: "Fetch Specialists", route: "/api/specialists", uid: uid || "unknown" });
+    } catch {}
     return NextResponse.json({ specialists: [] });
   }
 }
@@ -50,6 +54,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("specialists POST error:", e);
+    try {
+      const { logServerError } = await import("@/lib/server-logger");
+      await logServerError({ errorType: "api_error", errorMessage: String(e), severity: "Medium", userAction: "Save Specialist", route: "/api/specialists" });
+    } catch {}
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

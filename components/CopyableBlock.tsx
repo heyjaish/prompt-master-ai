@@ -9,10 +9,17 @@ export default function CopyableBlock({ content, explanation }: Props) {
   const [copied, setCopied] = useState(false);
 
   const copy = useCallback(async () => {
-    await navigator.clipboard.writeText(content).catch(() => null);
-    setCopied(true);
-    toast.success("Copied to clipboard!");
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      toast.success("Copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.error("Failed to copy");
+      import("../lib/error-logger").then(({ logFrontendError }) => {
+        logFrontendError({ errorType: "copy_failed", errorMessage: err instanceof Error ? err.message : String(err), severity: "Low", userAction: "Copy Prompt" });
+      });
+    }
   }, [content]);
 
   const download = useCallback(() => {
