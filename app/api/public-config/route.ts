@@ -4,7 +4,7 @@ const DEFAULTS = {
   maintenance:  { enabled: false, message: "" },
   features:     { splitView:true, imageUpload:true, history:true, quickActions:true, templates:true, skillsarkSSO:true },
   announcement: { enabled: false, title:"", message:"", type:"info" },
-  aiConfig:     { model:"gemini-2.0-flash", temperature:0.7, maxTokens:8192, systemPromptPrefix:"" },
+  aiConfig:     { model:"gemini-3-flash-preview", temperature:0.7, maxTokens:8192, systemPromptPrefix:"" },
   contact:      { email:"jaishkumar55@gmail.com", message:"Please contact admin for help.", supportUrl:"" },
 };
 

@@ -61,7 +61,7 @@ const DEFAULT_CFG: GlobalConfig = {
   maintenance:{ enabled:false, message:"We'll be back soon!" },
 };
 const DEFAULT_AI: AIConfig = {
-  model:"gemini-2.0-flash", temperature:0.7, maxTokens:8192,
+  model:"gemini-3-flash-preview", temperature:0.7, maxTokens:8192,
   systemPromptPrefix:"", enableHistory:true, enableSplitView:true,
 };
 const DEFAULT_ANN: Announcement = {
@@ -191,6 +191,16 @@ export default function AdminPage() {
   }, [isAdmin, pwOk]);
 
   useEffect(()=>{if(!loading&&!user){router.replace("/login");return;} if(!loading&&user&&isAdmin&&pwOk)load();},[user,loading,isAdmin,pwOk,load,router]);
+
+  // Auto-refresh data every 30 seconds while on admin panel to keep "Live Now" accurate
+  useEffect(() => {
+    if (!isAdmin || !pwOk || tab !== "overview") return;
+    const interval = setInterval(() => {
+      // Background load
+      ag("users").then(ud => setUsers(ud.users ?? [])).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [isAdmin, pwOk, tab]);
 
   useEffect(() => { if (tab === "errors") loadErrors(); }, [tab, loadErrors]);
 
@@ -396,15 +406,37 @@ export default function AdminPage() {
                 {/* Quick status */}
                 <div style={{display:"flex",flexDirection:"column",gap:11}}>
                   <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:S.bdR,padding:"14px 16px"}}>
+                    <div style={{fontSize:11.5,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:S.tx3,marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{width:8,height:8,borderRadius:"50%",background:"#22c55e",animation:"pulse 2s infinite"}}/> Live Now
+                    </div>
+                    {(()=>{
+                      const live = users.filter(u => u.lastActiveAt && u.lastActiveAt > Date.now() - 5 * 60 * 1000);
+                      if (live.length === 0) return <div style={{fontSize:12,color:S.tx3}}>No users active currently</div>;
+                      return (
+                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                          {live.slice(0,6).map(u => (
+                            <div key={u.uid} style={{display:"flex",alignItems:"center",gap:8}}>
+                              <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(99,102,241,.18)",fontSize:10,fontWeight:700,color:"#818cf8",display:"flex",alignItems:"center",justifyContent:"center"}}>{(u.name||"?")[0].toUpperCase()}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:11.5,fontWeight:600,color:S.tx1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.name||u.email.split("@")[0]}</div>
+                                <div style={{fontSize:10,color:S.tx3}}>{new Date(u.lastActiveAt!).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
+                              </div>
+                            </div>
+                          ))}
+                          {live.length > 6 && <div style={{fontSize:10.5,color:"#818cf8",textAlign:"center"}}>+ {live.length - 6} more</div>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:S.bdR,padding:"14px 16px"}}>
                     <div style={{fontSize:11.5,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:S.tx3,marginBottom:12}}>Announcement</div>
                     <div style={{fontSize:12.5,color:ann.enabled?"#4ade80":"#94a3b8",marginBottom:6}}>{ann.enabled?"🟢 Active":"⚪ Off"}</div>
                     {ann.enabled&&<div style={{fontSize:12,color:S.tx2,lineHeight:1.5}}><strong>{ann.title}</strong><br/>{ann.message}</div>}
-                    {!ann.enabled&&<div style={{fontSize:12,color:S.tx3}}>No active announcement</div>}
                   </div>
                   <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:S.bdR,padding:"14px 16px"}}>
                     <div style={{fontSize:11.5,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:S.tx3,marginBottom:10}}>AI Model</div>
                     <div style={{fontSize:12.5,color:"#818cf8",fontFamily:"monospace"}}>{aiCfg.model}</div>
-                    <div style={{fontSize:11.5,color:S.tx3,marginTop:4}}>Temp: {aiCfg.temperature} · Max: {aiCfg.maxTokens}</div>
                   </div>
                 </div>
               </div>
@@ -635,8 +667,8 @@ export default function AdminPage() {
                 <label style={{fontSize:13,fontWeight:700,color:S.tx1,display:"block",marginBottom:10}}>AI Model</label>
                 <select value={aiCfg.model} onChange={e=>setAiCfg(c=>({...c,model:e.target.value}))}
                   style={{width:"100%",background:"rgba(255,255,255,.05)",border:`1px solid ${S.border}`,borderRadius:10,color:S.tx1,fontSize:13,padding:"10px 12px",outline:"none",cursor:"pointer"}}>
-                  <option value="gemini-2.0-flash">⚡ gemini-2.0-flash (Fastest)</option>
-                  <option value="gemini-2.0-flash-lite">🔹 gemini-2.0-flash-lite (Lightest)</option>
+                  <option value="gemini-3-flash-preview">✨ gemini-3-flash-preview (Ultra-Fast)</option>
+                  <option value="gemini-2.0-flash">🔹 gemini-2.0-flash (Flash Core)</option>
                   <option value="gemini-1.5-pro">💎 gemini-1.5-pro (Most Capable)</option>
                   <option value="gemini-1.5-flash">🚀 gemini-1.5-flash (Balanced)</option>
                 </select>
