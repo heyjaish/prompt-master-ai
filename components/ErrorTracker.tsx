@@ -7,8 +7,14 @@ export default function ErrorTracker() {
 
   useEffect(() => {
     const logError = async (type: string, msg: string, stack: string | null) => {
-      // Ignore common non-critical 3rd party beacon errors (AdBlock noise)
+      // Don't loop if the API Call itself fails
+      if (msg.includes("/api/admin")) return;
+
+      // Intelligent Grading System
+      let severity: "Low" | "Medium" | "High" | "Critical" = "Medium";
       const lowMsg = msg.toLowerCase();
+      
+      // Mark 3rd party/ad-block issues as LOW
       if (
         lowMsg.includes("google-analytics") || 
         lowMsg.includes("googletagmanager") || 
@@ -16,10 +22,13 @@ export default function ErrorTracker() {
         lowMsg.includes("doubleclick") ||
         lowMsg.includes("/collect?") ||
         lowMsg.includes("analytics")
-      ) return;
+      ) {
+        severity = "Low";
+      }
 
-      // Don't loop if the API Call itself fails
-      if (msg.includes("/api/admin")) return;
+      // Mark actual crashes or API failures as HIGH/CRITICAL
+      if (type === "frontend_crash" || type === "unhandled_rejection") severity = "Critical";
+      if (type === "api_error" || type === "timeout" || type === "invalid_key") severity = "High";
       
       try {
         await fetch("/api/admin", {
@@ -31,7 +40,7 @@ export default function ErrorTracker() {
             email: user?.email ?? "unknown",
             errorType: type,
             errorMessage: msg,
-            severity: "Medium",
+            severity,
             stack: stack,
             route: window.location.pathname,
             userAction: "Global Catch",
