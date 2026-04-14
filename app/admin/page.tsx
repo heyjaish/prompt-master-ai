@@ -901,16 +901,26 @@ export default function AdminPage() {
                   <div style={{fontSize:14,fontWeight:700,color:S.tx1}}>🔴 User Error Monitor</div>
                   <div style={{fontSize:12,color:S.tx3,marginTop:3}}>Every error any user hits is automatically logged here in real-time.</div>
                 </div>
-                <button onClick={loadErrors} disabled={errLogsLoading} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:9,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.04)",color:S.tx2,fontSize:12.5,cursor:"pointer"}}>
-                  <RefreshCw size={12} style={{animation:errLogsLoading?"spin 1s linear infinite":undefined}}/> {errLogsLoading?"Loading…":"Refresh"}
-                </button>
-                <button onClick={()=>{
-                  const rows = errorLogs.map(e=>[new Date(e.timestamp).toISOString(),e.email,e.errorType,e.errorMessage.replace(/,/g," ")].join(","));
-                  const csv = "Timestamp,User,Type,Message\n"+rows.join("\n");
-                  const blob=new Blob([csv],{type:"text/csv"});
-                  const url=URL.createObjectURL(blob);
-                  const a=document.createElement("a"); a.href=url; a.download=`errors_${new Date().toISOString().slice(0,10)}.csv`; a.click();
-                }} style={{padding:"7px 14px",borderRadius:9,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.04)",color:S.tx2,fontSize:12.5,cursor:"pointer"}}>💾 Export CSV</button>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={loadErrors} disabled={errLogsLoading} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:9,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.04)",color:S.tx2,fontSize:12.5,cursor:"pointer"}}>
+                    <RefreshCw size={12} style={{animation:errLogsLoading?"spin 1s linear infinite":undefined}}/> {errLogsLoading?"Loading…":"Refresh"}
+                  </button>
+                  <button onClick={()=>{
+                    const rows = errorLogs.map(e=>[new Date(e.timestamp).toISOString(),e.email,e.errorType,e.errorMessage.replace(/,/g," ")].join(","));
+                    const csv = "Timestamp,User,Type,Message\n"+rows.join("\n");
+                    const blob=new Blob([csv],{type:"text/csv"});
+                    const url=URL.createObjectURL(blob);
+                    const a=document.createElement("a"); a.href=url; a.download=`errors_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+                  }} style={{padding:"7px 14px",borderRadius:9,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.04)",color:S.tx2,fontSize:12.5,cursor:"pointer"}}>💾 CSV</button>
+                  <button onClick={()=>{
+                    const data = JSON.stringify(errorLogs, null, 2);
+                    const blob = new Blob([data], {type: "application/json"});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href=url; a.download=`promptforge_errors_${new Date().toISOString().slice(0,10)}.json`; a.click();
+                  }} style={{padding:"7px 14px",borderRadius:9,border:`1px solid rgba(99,102,241,.3)`,background:"rgba(99,102,241,.1)",color:"#818cf8",fontSize:12.5,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                    <Download size={12}/> AI-JSON
+                  </button>
+                </div>
               </div>
 
               {/* Stats Summary */}
