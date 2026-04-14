@@ -8,6 +8,7 @@ import {
   Crown, TrendingUp, Activity, AlertTriangle, Download, Megaphone,
   Bot, ChevronDown, ChevronUp, Trash2, CheckSquare, Square,
   BarChart2, Zap, Lock, Unlock, Globe, Bell, AlertCircle, CheckCircle, XCircle, User,
+  Copy, ClipboardCopy
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -917,8 +918,15 @@ export default function AdminPage() {
                     const blob = new Blob([data], {type: "application/json"});
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a"); a.href=url; a.download=`promptforge_errors_${new Date().toISOString().slice(0,10)}.json`; a.click();
-                  }} style={{padding:"7px 14px",borderRadius:9,border:`1px solid rgba(99,102,241,.3)`,background:"rgba(99,102,241,.1)",color:"#818cf8",fontSize:12.5,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                    <Download size={12}/> AI-JSON
+                  }} style={{padding:"7px 11px",borderRadius:9,border:`1px solid rgba(99,102,241,.3)`,background:"rgba(99,102,241,.1)",color:"#818cf8",fontSize:12.5,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}} title="Download for AI Support">
+                    <Download size={13}/>
+                  </button>
+                  <button onClick={()=>{
+                    const data = JSON.stringify(errorLogs, null, 2);
+                    navigator.clipboard.writeText(data);
+                    st("📋 All errors copied (JSON)");
+                  }} style={{padding:"7px 11px",borderRadius:9,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.04)",color:S.tx2,cursor:"pointer"}} title="Copy All JSON">
+                    <Copy size={13}/>
                   </button>
                 </div>
               </div>
@@ -1041,6 +1049,11 @@ export default function AdminPage() {
                                 {e.email && e.email !== "unknown" && <span style={{fontSize:12,color:"#a5b4fc"}}>{e.email}</span>}
                                 {e.resolved&&<span style={{fontSize:10.5,color:"#4ade80",background:"rgba(34,197,94,.1)",padding:"1px 7px",borderRadius:10}}>✓ Resolved</span>}
                                 <span style={{fontSize:11,color:S.tx3,marginLeft:"auto"}}>{new Date(e.timestamp).toLocaleString()}</span>
+                                <button
+                                  onClick={(ev)=>{ev.stopPropagation(); navigator.clipboard.writeText(JSON.stringify(e, null, 2)); st("📋 Copied error record");}}
+                                  style={{fontSize:10.5,padding:"2px 9px",borderRadius:6,border:`1px solid ${S.border}`,background:"rgba(255,255,255,.05)",color:S.tx2,cursor:"pointer"}}
+                                  title="Copy this record as JSON"
+                                ><ClipboardCopy size={9}/></button>
                                 {!e.resolved&&<button
                                   onClick={async(ev)=>{ev.stopPropagation();try{await ap({action:"resolveError",errorId:e.id});setErrorLogs(p=>p.map(x=>x.id===e.id?{...x,resolved:true}:x));st("✅ Marked resolved");}catch{st("❌ Failed");}}}
                                   style={{fontSize:10.5,padding:"2px 9px",borderRadius:6,border:"1px solid rgba(34,197,94,.3)",background:"rgba(34,197,94,.08)",color:"#4ade80",cursor:"pointer"}}

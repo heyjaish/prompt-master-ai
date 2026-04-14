@@ -24,7 +24,11 @@ export async function POST(req: NextRequest) {
     const genAI = new GoogleGenerativeAI(keys[0]);
     const model = genAI.getGenerativeModel({ 
       model: DEFAULT_MODEL,
-      generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
+      generationConfig: { 
+        temperature: 0.7, 
+        maxOutputTokens: 1000,
+        responseMimeType: "application/json"
+      }
     });
 
     const specialistContext = activeSpecialist 
