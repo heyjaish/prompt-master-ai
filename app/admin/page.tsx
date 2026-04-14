@@ -369,6 +369,7 @@ export default function AdminPage() {
           {tab==="overview"&&(
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))",gap:11}}>
+                <Stat label="Live Users" value={users.filter(u => u.lastActiveAt && u.lastActiveAt > Date.now() - 5 * 60 * 1000).length} sub="Active last 5 min" color="#22c55e" icon={<Activity size={15}/>}/>
                 <Stat label="Total Users" value={totalU} sub={`${users.filter(u=>u.status==="active").length} active`} icon={<Users size={15}/>}/>
                 <Stat label="Total Prompts" value={totalP} sub="all time" color="#4ade80" icon={<Activity size={15}/>}/>
                 <Stat label="Today" value={todayP} sub="prompts today" color="#fbbf24" icon={<TrendingUp size={15}/>}/>
@@ -416,6 +417,7 @@ export default function AdminPage() {
               {analytics?(
                 <>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:11}}>
+                    <Stat label="Live Users"  value={users.filter(u => u.lastActiveAt && u.lastActiveAt > Date.now() - 5 * 60 * 1000).length} color="#22c55e" icon={<Activity size={14}/>}/>
                     <Stat label="Total Users"  value={(analytics.totalUsers as number)||0}  icon={<Users size={14}/>}/>
                     <Stat label="Active"       value={(analytics.activeUsers as number)||0}  color="#22c55e" icon={<Activity size={14}/>}/>
                     <Stat label="Banned"       value={(analytics.bannedUsers as number)||0}  color="#ef4444" icon={<Ban size={14}/>}/>
@@ -540,7 +542,13 @@ export default function AdminPage() {
                             <div style={{display:"flex",alignItems:"center",gap:8}}>
                               {u.photoURL?<img src={u.photoURL} alt="" style={{width:26,height:26,borderRadius:"50%",border:`1px solid ${S.border}`,flexShrink:0}}/>:<div style={{width:26,height:26,borderRadius:"50%",background:"rgba(99,102,241,.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#818cf8",flexShrink:0}}>{(u.name||"?")[0].toUpperCase()}</div>}
                               <div>
-                                <div style={{fontSize:12.5,fontWeight:600,color:S.tx1,display:"flex",alignItems:"center",gap:4}}>{u.name||"Unknown"}{u.role==="admin"&&<Crown size={9} color="#f59e0b"/>}</div>
+                                <div style={{fontSize:12.5,fontWeight:600,color:S.tx1,display:"flex",alignItems:"center",gap:4}}>
+                                  {u.name||"Unknown"}
+                                  {u.role==="admin"&&<Crown size={9} color="#f59e0b"/>}
+                                  {u.lastActiveAt && u.lastActiveAt > Date.now() - 5 * 60 * 1000 && (
+                                    <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",boxShadow:"0 0 6px #22c55e",marginLeft:2}} title="Live Now"/>
+                                  )}
+                                </div>
                                 <div style={{fontSize:10.5,color:S.tx3,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.email}</div>
                               </div>
                             </div>

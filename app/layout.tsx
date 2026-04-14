@@ -4,6 +4,7 @@ import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/lib/auth-context";
 
 import ErrorTracker from "@/components/ErrorTracker";
+import PresenceTracker from "@/components/PresenceTracker";
 
 export const metadata: Metadata = {
   title: "Prompt Master AI — Specialist Prompt Engineering Tool",
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <ErrorTracker />
+          <PresenceTracker />
           {children}
         </AuthProvider>
         <Toaster

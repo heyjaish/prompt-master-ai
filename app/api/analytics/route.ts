@@ -23,6 +23,9 @@ export async function POST(req: NextRequest) {
     const ref = db.collection("analytics").doc();
     await ref.set({ uid, event, metadata: metadata || {}, timestamp: timestamp || Date.now(), sessionId: sessionId || "" });
 
+    // Update user's lastActiveAt to track live presence
+    await db.collection("users").doc(uid).set({ lastActiveAt: Date.now() }, { merge: true });
+
     // Also increment feature counter in summary doc
     await db.collection("analytics").doc("summary").set(
       { [event]: (await db.collection("analytics").doc("summary").get().then(s => (s.data()?.[event] || 0))) + 1, updatedAt: Date.now() },
