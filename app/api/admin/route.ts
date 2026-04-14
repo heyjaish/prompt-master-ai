@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
     if (action === "errors") {
       const snap = await db.collection("errors")
         .orderBy("timestamp", "desc")
-        .limit(100)
+        .limit(500)
         .get();
       const errors = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       return NextResponse.json({ errors });
