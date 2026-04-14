@@ -8,7 +8,15 @@ export default function ErrorTracker() {
   useEffect(() => {
     const logError = async (type: string, msg: string, stack: string | null) => {
       // Ignore common non-critical 3rd party beacon errors (AdBlock noise)
-      if (msg.includes("google-analytics") || msg.includes("googletagmanager") || msg.includes("clarity.ms") || msg.includes("doubleclick")) return;
+      const lowMsg = msg.toLowerCase();
+      if (
+        lowMsg.includes("google-analytics") || 
+        lowMsg.includes("googletagmanager") || 
+        lowMsg.includes("clarity.ms") || 
+        lowMsg.includes("doubleclick") ||
+        lowMsg.includes("/collect?") ||
+        lowMsg.includes("analytics")
+      ) return;
 
       // Don't loop if the API Call itself fails
       if (msg.includes("/api/admin")) return;
