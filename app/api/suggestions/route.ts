@@ -21,83 +21,80 @@ export async function POST(req: NextRequest) {
     const keys = getAllApiKeys();
     if (keys.length === 0) return NextResponse.json({ error: "No API keys configured" }, { status: 500 });
     
-    const genAI = new GoogleGenerativeAI(keys[0]);
-    const model = genAI.getGenerativeModel({ 
-      model: DEFAULT_MODEL,
-      generationConfig: { 
-        temperature: 0.7, 
-        maxOutputTokens: 1000,
-        responseMimeType: "application/json"
-      }
-    });
-
     const specialistContext = activeSpecialist 
       ? `Active Specialist: ${activeSpecialist.name} (${activeSpecialist.description})`
       : "No specific specialist active.";
 
-    const historyContext = history?.slice(0, 10).map((h: any) => 
-      `- [${h.category}] ${h.originalIdea}`
+    const historyContext = history?.slice(0, 5).map((h: any) => 
+      `- ${h.originalIdea}`
     ).join("\n") || "No history yet.";
 
-    const keywordsContext = userKeywords?.slice(0, 10).join(", ") || "None";
+    const keywordsContext = userKeywords?.slice(0, 8).join(", ") || "None";
 
     const prompt = `
-      You are an AI Suggestion Brain for a Prompt Master SaaS. 
-      Your goal is to predict what the user needs next based on their history, active specialist, and keyword style.
-
-      USER CONTEXT:
+      You are an AI Suggestion Brain. Predict what the user needs next based on context.
+      
+      CONTEXT:
       ${specialistContext}
-      
-      USER RECENT HISTORY (Last 10):
+      HISTORY:
       ${historyContext}
-      
-      FREQUENT KEYWORDS:
+      KEYWORDS:
       ${keywordsContext}
 
       TASK:
-      Generate two lists of short strings (3-6 words each).
+      Generate 8 "suggestions" (actions/goals) and 12 "tips" (modifiers).
+      Keep them short (2-4 words).
       
-      CRITICAL RULE: suggestions MUST BE tailored to the ACTIVE SPECIALIST.
-      - If Image Specialist: suggestions like "Cinematic lighting", "8k hyperrealistic", "Portrait shot", "Macro photography".
-      - If Code Specialist: suggestions like "Refactor function", "Explain logic", "Write unit test", "Fix bug", "TypeScript conversion".
-      - If Business Specialist: suggestions like "Marketing plan", "Competitor analysis", "Elevator pitch", "Revenue model".
+      MATCH THE SPECIALIST TONE:
+      - If Image: Creative/Visual modifiers.
+      - If Code: Programming tasks.
+      - If Business: Professional/Strategy items.
 
-      SECTION 1: AI SUGGESTIONS (Immediate high-level goals/actions)
-      - Provide 8 items.
-      
-      SECTION 2: SMART TIPS (Technical modifiers or parameter additions)
-      - Provide 12 items.
-      
-      RETURN ONLY JSON:
+      RETURN JSON ONLY:
       {
         "suggestions": ["...", "..."],
         "tips": ["...", "..."]
       }
     `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    
-    // Attempt to extract JSON from text (in case Gemini adds markdown blocks)
-    const jsonStr = text.match(/\{[\s\S]*\}/)?.[0] || text;
-    const data = JSON.parse(jsonStr);
+    let lastError = null;
+    // Try rotating through keys to avoid 429s
+    for (let i = 0; i < keys.length; i++) {
+      try {
+        const genAI = new GoogleGenerativeAI(keys[i]);
+        const model = genAI.getGenerativeModel({ 
+          model: DEFAULT_MODEL,
+          generationConfig: { 
+            temperature: 0.7, 
+            maxOutputTokens: 600,
+            responseMimeType: "application/json"
+          }
+        });
 
-    return NextResponse.json(data);
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        
+        // Extract JSON (just in case)
+        const jsonStr = text.match(/\{[\s\S]*\}/)?.[0] || text;
+        const data = JSON.parse(jsonStr);
+        
+        return NextResponse.json(data);
+      } catch (e: any) {
+        lastError = e;
+        const msg = String(e).toLowerCase();
+        // If it's a quota error or rate limit, try next key
+        if (msg.includes("429") || msg.includes("quota") || msg.includes("limit")) {
+          continue;
+        }
+        throw e; // If it's a different error, stop
+      }
+    }
+
+    throw lastError || new Error("All keys failed or exhausted");
 
   } catch (e) {
     console.error("[Suggestions API] Error:", e);
-    try {
-      const { logServerError } = await import("@/lib/server-logger");
-      await logServerError({
-        errorType: "api_error",
-        errorMessage: String(e),
-        severity: "Low",
-        userAction: "Generate Suggestions",
-        route: "/api/suggestions",
-        uid: "system"
-      });
-    } catch {}
+    // Fallback static data so UI doesn't break
     return NextResponse.json({ 
       suggestions: ["Try a new idea", "Better formatting", "Add context", "Fix typos", "Use headers", "Be specific", "Add constraints", "Optimized view"],
       tips: ["Persona-driven", "Bullet points", "Tone: Formal", "Step-by-step", "Clear goal", "Technical detail", "Brief output", "Creative twist"]
